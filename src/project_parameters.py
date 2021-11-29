@@ -16,7 +16,6 @@ def load_yaml(filepath):
 # class
 
 
-#TODO: create is_valid_value function to check if value is valid.
 class ProjectParameters:
     def __init__(self, ) -> None:
         self.parser = argparse.ArgumentParser(
@@ -68,20 +67,20 @@ class ProjectParameters:
                 value = [eval(v) for v in value.split(',')]
             if check:
                 # check key whether exist in the config
-                is_valid_value(information='check kwargs',
-                               source=key,
-                               target=list(self.config.keys()),
-                               method='in')
+                assert key in list(
+                    self.config.keys()
+                ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                    key, list(self.config.keys()))
             exec('kwargs_dict["{}"]={}'.format(key, value))
         else:
             for v in kwargs.split(','):
                 key, value = v.split(sep='=', maxsplit=1)
                 if check:
                     # check key whether exist in the config
-                    is_valid_value(information='check kwargs',
-                                   source=key,
-                                   target=list(self.config.keys()),
-                                   method='in')
+                    assert key in list(
+                        self.config.keys()
+                    ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                        key, list(self.config.keys()))
                 if kwargs_type == 'str':
                     value = None if value == 'None' else value
                     exec('kwargs_dict["{}"]="{}"'.format(key, value))
