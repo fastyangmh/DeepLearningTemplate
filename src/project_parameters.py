@@ -69,7 +69,7 @@ class ProjectParameters:
                 # check key whether exist in the config
                 assert key in list(
                     self.config.keys()
-                ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
                     key, list(self.config.keys()))
             exec('kwargs_dict["{}"]={}'.format(key, value))
         else:
@@ -79,7 +79,7 @@ class ProjectParameters:
                     # check key whether exist in the config
                     assert key in list(
                         self.config.keys()
-                    ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                    ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
                         key, list(self.config.keys()))
                 if kwargs_type == 'str':
                     value = None if value == 'None' else value
