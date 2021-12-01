@@ -175,7 +175,7 @@ class MyMNIST(MNIST):
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None,
                  download: bool = False) -> None:
-        super().__init__(root,
+        super().__init__(root=root,
                          train=train,
                          transform=transform,
                          target_transform=target_transform,
@@ -196,7 +196,7 @@ class MyCIFAR10(CIFAR10):
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None,
                  download: bool = False) -> None:
-        super().__init__(root,
+        super().__init__(root=root,
                          train=train,
                          transform=transform,
                          target_transform=target_transform,
@@ -218,7 +218,7 @@ class MySPEECHCOMMANDS(SPEECHCOMMANDS):
                  target_transform,
                  download: bool = False,
                  subset: Optional[str] = None) -> None:
-        super().__init__(root, download=download, subset=subset)
+        super().__init__(root=root, download=download, subset=subset)
         self.loader = loader
         self.transform = transform
         self.target_transform = target_transform
@@ -254,7 +254,7 @@ class MyImageFolder(ImageFolder):
                  root: str,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None):
-        super().__init__(root,
+        super().__init__(root=root,
                          transform=transform,
                          target_transform=target_transform,
                          loader=Image.open)
@@ -271,7 +271,7 @@ class MyAudioFolder(DatasetFolder):
                  loader: Callable[[str], Any],
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None) -> None:
-        super().__init__(root,
+        super().__init__(root=root,
                          loader=loader,
                          extensions=('.wav'),
                          transform=transform,
@@ -337,9 +337,15 @@ class ImageLightningDataModule(BaseLightningDataModule):
     def __init__(self, root, predefined_dataset, classes, max_samples,
                  batch_size, num_workers, device, transforms_config,
                  target_transforms_config):
-        super().__init__(root, predefined_dataset, classes, max_samples,
-                         batch_size, num_workers, device, transforms_config,
-                         target_transforms_config)
+        super().__init__(root=root,
+                         predefined_dataset=predefined_dataset,
+                         classes=classes,
+                         max_samples=max_samples,
+                         batch_size=batch_size,
+                         num_workers=num_workers,
+                         device=device,
+                         transforms_config=transforms_config,
+                         target_transforms_config=target_transforms_config)
 
     def prepare_data(self) -> None:
         # download predefined dataset
@@ -408,9 +414,15 @@ class AudioLightningDataModule(BaseLightningDataModule):
     def __init__(self, root, predefined_dataset, classes, max_samples,
                  batch_size, num_workers, device, transforms_config,
                  target_transforms_config, sample_rate):
-        super().__init__(root, predefined_dataset, classes, max_samples,
-                         batch_size, num_workers, device, transforms_config,
-                         target_transforms_config)
+        super().__init__(root=root,
+                         predefined_dataset=predefined_dataset,
+                         classes=classes,
+                         max_samples=max_samples,
+                         batch_size=batch_size,
+                         num_workers=num_workers,
+                         device=device,
+                         transforms_config=transforms_config,
+                         target_transforms_config=target_transforms_config)
         self.loader = AudioLoader(sample_rate=sample_rate)
 
     def prepare_data(self) -> None:
