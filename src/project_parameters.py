@@ -66,24 +66,26 @@ class ProjectParameters:
             elif kwargs_type == 'num_list':
                 value = [eval(v) for v in value.split(',')]
             if check:
-                # check key whether exist in the config
+                # check key if exist in the config
                 assert key in list(
                     self.config.keys()
-                ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                ), 'please check if the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
                     key, list(self.config.keys()))
             exec('kwargs_dict["{}"]={}'.format(key, value))
         else:
             for v in kwargs.split(','):
                 key, value = v.split(sep='=', maxsplit=1)
                 if check:
-                    # check key whether exist in the config
+                    # check key if exist in the config
                     assert key in list(
                         self.config.keys()
-                    ), 'please check whether the keyword argument exists in the configuration.\nkwargs: {}\nconfig: {}'.format(
+                    ), 'please check if the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
                         key, list(self.config.keys()))
                 if kwargs_type == 'str':
-                    value = None if value == 'None' else value
-                    exec('kwargs_dict["{}"]="{}"'.format(key, value))
+                    if value == 'None':
+                        exec('kwargs_dict["{}"]={}'.format(key, value))
+                    else:
+                        exec('kwargs_dict["{}"]="{}"'.format(key, value))
                 elif kwargs_type == 'num':
                     exec('kwargs_dict["{}"]={}'.format(key, value))
                 elif kwargs_type == 'bool':
