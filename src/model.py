@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pl_bolts.models import autoencoders
+from torchsummary import summary
 
 
 #def
@@ -55,12 +57,57 @@ def load_from_checkpoint_for_supervised_model(
     return model
 
 
+def create_model_for_supervised_model(project_parameters):
+    model = SupervisedModel(
+        loss_function_name=project_parameters.loss_function_name,
+        optimizers_config=project_parameters.optimizers_config,
+        lr=project_parameters.lr,
+        lr_schedulers_config=project_parameters.lr_schedulers_config,
+        model_name=project_parameters.model_name,
+        in_chans=project_parameters.in_chans,
+        classes=project_parameters.classes,
+        data_balance=project_parameters.data_balance,
+        root=project_parameters.root)
+    if project_parameters.checkpoint_path is not None:
+        if isfile(project_parameters.checkpoint_path):
+            model = load_from_checkpoint_for_supervised_model(
+                device=project_parameters.device,
+                checkpoint_path=project_parameters.checkpoint_path,
+                classes=project_parameters.classes,
+                model=model)
+        else:
+            assert False, 'please check the checkpoint_path argument.\nthe checkpoint_path value is {}.'.format(
+                project_parameters.checkpoint_path)
+    return model
+
+
+def create_model_for_unsupervised_model(project_parameters):
+    model = UnsupervisedModel(
+        loss_function_name=project_parameters.loss_function_name,
+        optimizers_config=project_parameters.optimizers_config,
+        lr=project_parameters.lr,
+        lr_schedulers_config=project_parameters.lr_schedulers_config,
+        model_name=project_parameters.model_name,
+        in_chans=project_parameters.in_chans,
+        input_height=project_parameters.input_height,
+        latent_dim=project_parameters.latent_dim,
+        classes=project_parameters.classes)
+    if project_parameters.checkpoint_path is not None:
+        if isfile(project_parameters.checkpoint_path):
+            model = load_from_checkpoint(
+                device=project_parameters.device,
+                checkpoint_path=project_parameters.checkpoint_path,
+                model=model)
+        else:
+            assert False, 'please check the checkpoint_path argument.\nthe checkpoint_path value is {}.'.format(
+                project_parameters.checkpoint_path)
+    return model
+
+
 #class
 class BaseModel(LightningModule):
-    def __init__(self, loss_function, optimizers_config, lr,
-                 lr_schedulers_config) -> None:
+    def __init__(self, optimizers_config, lr, lr_schedulers_config) -> None:
         super().__init__()
-        self.loss_function = loss_function
         self.optimizers_config = optimizers_config
         self.lr = lr
         self.lr_schedulers_config = lr_schedulers_config
@@ -78,12 +125,12 @@ class BaseModel(LightningModule):
         exec('from {} import {}'.format(filename, class_name))
         return eval(class_name)
 
-    def create_loss_function(self):
-        assert self.loss_function in dir(
+    def create_loss_function(self, loss_function_name):
+        assert loss_function_name in dir(
             nn
-        ), 'please check the loss_function argument.\nloss_function: {}\nvalid: {}'.format(
-            self.loss_function, [v for v in dir(nn) if v[0].isupper()])
-        return eval('nn.{}()'.format(self.loss_function))
+        ), 'please check the loss_function_name argument.\nloss_function: {}\nvalid: {}'.format(
+            loss_function_name, [v for v in dir(nn) if v[0].isupper()])
+        return eval('nn.{}()'.format(loss_function_name))
 
     def parse_optimizers(self, params):
         optimizers = []
@@ -138,13 +185,20 @@ class BaseModel(LightningModule):
                     [v for v in dir(optim) if v[0].isupper()])
         return lr_schedulers
 
+    def configure_optimizers(self):
+        optimizers = self.parse_optimizers(params=self.parameters())
+        if self.lr_schedulers_config is not None:
+            lr_schedulers = self.parse_lr_schedulers(optimizers=optimizers)
+            return optimizers, lr_schedulers
+        else:
+            return optimizers
+
 
 class SupervisedModel(BaseModel):
-    def __init__(self, loss_function, optimizers_config, lr,
-                 lr_schedulers_config, model_name, in_chans, classes,
-                 data_balance, root) -> None:
-        super().__init__(loss_function=loss_function,
-                         optimizers_config=optimizers_config,
+    def __init__(self, optimizers_config, lr, lr_schedulers_config, model_name,
+                 in_chans, classes, loss_function_name, data_balance,
+                 root) -> None:
+        super().__init__(optimizers_config=optimizers_config,
                          lr=lr,
                          lr_schedulers_config=lr_schedulers_config)
         self.backbone_model = self.create_backbone_model(model_name=model_name,
@@ -152,7 +206,10 @@ class SupervisedModel(BaseModel):
                                                          classes=classes)
         self.activation_function = nn.Sigmoid()
         self.loss_function = self.create_loss_function(
-            data_balance=data_balance, root=root, classes=classes)
+            loss_function_name=loss_function_name,
+            data_balance=data_balance,
+            root=root,
+            classes=classes)
         self.accuracy_function = Accuracy()
         self.confusion_matrix_function = ConfusionMatrix(
             num_classes=len(classes))
@@ -194,8 +251,9 @@ class SupervisedModel(BaseModel):
         }
         return weight
 
-    def create_loss_function(self, data_balance, root, classes):
-        loss_function = super().create_loss_function()
+    def create_loss_function(self, loss_function_name, data_balance, root,
+                             classes):
+        loss_function = super().create_loss_function(loss_function_name)
         if data_balance:
             weight = self.calculate_weight(root=root, classes=classes)
             weight = torch.Tensor(list(weight.values()))
@@ -203,14 +261,6 @@ class SupervisedModel(BaseModel):
             weight = None
         loss_function.weight = weight
         return loss_function
-
-    def configure_optimizers(self):
-        optimizers = self.parse_optimizers(params=self.parameters())
-        if self.lr_schedulers_config is not None:
-            lr_schedulers = self.parse_lr_schedulers(optimizers=optimizers)
-            return optimizers, lr_schedulers
-        else:
-            return optimizers
 
     def forward(self, x):
         return self.activation_function(self.backbone_model(x))
@@ -296,13 +346,120 @@ class SupervisedModel(BaseModel):
         self.stage_index += 1
 
 
-#TODO: add unsupervised model.
+class UnsupervisedModel(BaseModel):
+    def __init__(self, optimizers_config, lr, lr_schedulers_config, model_name,
+                 in_chans, input_height, latent_dim, loss_function_name,
+                 classes) -> None:
+        super().__init__(optimizers_config=optimizers_config,
+                         lr=lr,
+                         lr_schedulers_config=lr_schedulers_config)
+        self.backbone_model = self.create_backbone_model(
+            model_name=model_name,
+            in_chans=in_chans,
+            input_height=input_height,
+            latent_dim=latent_dim)
+        self.activation_function = nn.Sigmoid()
+        self.loss_function = self.create_loss_function(
+            loss_function_name=loss_function_name)
+        self.classes = classes
+        self.stage_index = 0
+
+    def set_in_chans(self, backbone_model, in_chans):
+        backbone_model.encoder.conv1 = nn.Conv2d(
+            in_channels=in_chans,
+            out_channels=backbone_model.encoder.conv1.out_channels,
+            kernel_size=backbone_model.encoder.conv1.kernel_size,
+            stride=backbone_model.encoder.conv1.stride,
+            padding=backbone_model.encoder.conv1.padding,
+            bias=backbone_model.encoder.conv1.bias)
+        backbone_model.decoder.conv1 = nn.Conv2d(
+            in_channels=backbone_model.decoder.conv1.in_channels,
+            out_channels=in_chans,
+            kernel_size=backbone_model.decoder.conv1.kernel_size,
+            stride=backbone_model.decoder.conv1.stride,
+            padding=backbone_model.decoder.conv1.padding,
+            bias=backbone_model.decoder.conv1.bias)
+        return backbone_model
+
+    def create_backbone_model(self, model_name, in_chans, input_height,
+                              latent_dim):
+        if model_name in dir(autoencoders):
+            backbone_model = eval(
+                'autoencoders.{}(input_height=input_height, latent_dim=latent_dim)'
+                .format(model_name))
+            backbone_model = self.set_in_chans(backbone_model=backbone_model,
+                                               in_chans=in_chans)
+        elif isfile(model_name):
+            class_name = self.import_class_from_file(filepath=model_name)
+            backbone_model = class_name(in_chans=in_chans,
+                                        input_height=input_height,
+                                        latent_dim=latent_dim)
+        else:
+            assert False, 'please check the model_name argument.\nthe model_name value is {}.'.format(
+                model_name)
+        return backbone_model
+
+    def forward(self, x):
+        return self.activation_function(self.backbone_model(x))
+
+    def shared_step(self, batch):
+        x, _ = batch
+        x_hat = self.forward(x)
+        loss = self.loss_function(x_hat, x)
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        loss = self.shared_step(batch=batch)
+        self.log('train_loss',
+                 loss,
+                 on_step=True,
+                 on_epoch=True,
+                 prog_bar=True,
+                 logger=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.shared_step(batch=batch)
+        self.log('val_loss', loss, prog_bar=True)
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        x_hat = self.forward(x)
+        loss = self.loss_function(x_hat, x)
+        self.log('test_loss', loss)
+        reduction = self.loss_function.reduction
+        self.loss_function.reduction = 'none'
+        loss_step = self.loss_function(x_hat,
+                                       x).mean(dim=(1, 2,
+                                                    3)).cpu().data.numpy()
+        self.loss_function.reduction = reduction
+        y_step = y.cpu().data.numpy()
+        return {'y': y_step, 'loss': loss_step}
+
+    def test_epoch_end(self, test_outs):
+        stages = ['train', 'val', 'test']
+        print('\ntest the {} dataset'.format(stages[self.stage_index]))
+        print('the {} dataset confusion matrix:'.format(
+            stages[self.stage_index]))
+        y = np.concatenate([v['y'] for v in test_outs])
+        loss = np.concatenate([v['loss'] for v in test_outs])
+        figure = plt.figure(figsize=[11.2, 6.3])
+        plt.title(stages[self.stage_index])
+        for idx, v in enumerate(self.classes):
+            score = loss[y == idx]
+            sns.kdeplot(score, label=v)
+        plt.xlabel(xlabel='Loss')
+        plt.legend()
+        plt.close()
+        self.logger.experiment.add_figure(
+            '{} loss density'.format(stages[self.stage_index]), figure,
+            self.current_epoch)
+        self.stage_index += 1
+
 
 if __name__ == '__main__':
     #parameters
     project_parameters = {
-        'loss_function': 'BCEWithLogitsLoss',
-        'checkpoint_path': None,
         'optimizers_config': {
             'Adam': {
                 'betas': [0.9, 0.999],
@@ -317,24 +474,57 @@ if __name__ == '__main__':
                 'T_max': 10
             }
         },
-        'model_name': 'tf_mobilenetv3_small_minimal_100',
         'in_chans': 3,
-        'classes':
-        ['buildings', 'forest', 'glacier', 'mountain', 'sea', 'street'],
-        'data_balance': True,
-        'root': './data/Intel_Image_Classification',
-        'device': 'cpu'
+        'checkpoint_path': None,
+        'batch_size': 2
     }
     project_parameters = argparse.Namespace(**project_parameters)
 
-    #
-    model = SupervisedModel(
-        loss_function=project_parameters.loss_function,
-        optimizers_config=project_parameters.optimizers_config,
-        lr=project_parameters.lr,
-        lr_schedulers_config=project_parameters.lr_schedulers_config,
-        model_name=project_parameters.model_name,
-        in_chans=project_parameters.in_chans,
-        classes=project_parameters.classes,
-        data_balance=project_parameters.data_balance,
-        root=project_parameters.root)
+    # create input data
+    x = torch.ones(project_parameters.batch_size, project_parameters.in_chans,
+                   224, 224)
+
+    # create supervised model
+    project_parameters.loss_function_name = 'BCEWithLogitsLoss'
+    project_parameters.model_name = 'tf_mobilenetv3_small_minimal_100'
+    project_parameters.classes = [
+        '0 - zero', '1 - one', '2 - two', '3 - three', '4 - four', '5 - five',
+        '6 - six', '7 - seven', '8 - eight', '9 - nine'
+    ]
+    project_parameters.data_balance = False
+    project_parameters.root = './data'
+    model = create_model_for_supervised_model(
+        project_parameters=project_parameters)
+
+    # display model information
+    summary(model=model,
+            input_size=(project_parameters.in_chans, 224, 224),
+            device='cpu')
+
+    # get model output
+    y = model(x)
+
+    # display the dimension of input and output
+    print('the dimension of input: {}'.format(x.shape))
+    print('the dimension of output: {}'.format(y.shape))
+
+    # create unsupervised model
+    project_parameters.loss_function_name = 'MSELoss'
+    project_parameters.model_name = 'AE'
+    project_parameters.input_height = 224
+    project_parameters.latent_dim = 256
+    project_parameters.classes = ['normal', 'abnormal']
+    model = create_model_for_unsupervised_model(
+        project_parameters=project_parameters)
+
+    # display model information
+    summary(model=model,
+            input_size=(project_parameters.in_chans, 224, 224),
+            device='cpu')
+
+    # get model output
+    x_hat = model(x)
+
+    # display the dimension of input and output
+    print('the dimension of input: {}'.format(x.shape))
+    print('the dimension of output: {}'.format(x_hat.shape))

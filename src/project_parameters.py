@@ -114,6 +114,7 @@ class ProjectParameters:
             self.config = load_yaml(filepath=args.config)
         else:
             self.config = {}
+        self.config['config'] = args.config
         kwargs_dict = self.get_kwargs(args=args)
         self.config.update(kwargs_dict)
         self.set_abspath()
