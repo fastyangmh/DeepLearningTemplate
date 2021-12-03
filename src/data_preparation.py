@@ -21,6 +21,65 @@ from torch.utils.data import random_split, DataLoader
 from os import makedirs
 
 
+#def
+def parse_transforms(transforms_config):
+    if transforms_config is None:
+        return {'train': None, 'val': None, 'test': None, 'predict': None}
+    transforms_dict = defaultdict(list)
+    for stage in transforms_config.keys():
+        if transforms_config[stage] is None:
+            transforms_dict[stage] = None
+            continue
+        for name, value in transforms_config[stage].items():
+            if name in ['DigitalFilter', 'PadWaveform']:
+                name = name
+            elif name in dir(torchvision.transforms):
+                name = 'torchvision.transforms.{}'.format(name)
+            elif name in dir(torchaudio.transforms):
+                name = 'torchaudio.transforms.{}'.format(name)
+            if value is None:
+                transforms_dict[stage].append(eval('{}()'.format(name)))
+            else:
+                if type(value) is dict:
+                    transform_arguments = []
+                    for a, b in value.items():
+                        if type(b) is str:
+                            arg = '{}="{}"'.format(a, b)
+                        else:
+                            arg = '{}={}'.format(a, b)
+                        transform_arguments.append(arg)
+                    transform_arguments = ','.join(transform_arguments)
+                    value = transform_arguments
+                transforms_dict[stage].append(
+                    eval('{}({})'.format(name, value)))
+        transforms_dict[stage] = torchvision.transforms.Compose(
+            transforms_dict[stage])
+    return transforms_dict
+
+
+def parse_target_transforms(target_transforms_config, classes):
+    if target_transforms_config is None:
+        return {'train': None, 'val': None, 'test': None, 'predict': None}
+    target_transforms_dict = {}
+    for stage in target_transforms_config.keys():
+        if target_transforms_config[stage] is None:
+            target_transforms_dict[stage] = None
+            continue
+        for name, value in target_transforms_config[stage].items():
+            if type(value) is dict:
+                target_transform_arguments = []
+                for a, b in value.items():
+                    if a == 'num_classes' and b is None:
+                        b = len(classes)
+                    arg = '{}={}'.format(a, b)
+                    target_transform_arguments.append(arg)
+                target_transform_arguments = ','.join(
+                    target_transform_arguments)
+                value = target_transform_arguments
+            target_transforms_dict[stage] = eval('{}({})'.format(name, value))
+    return target_transforms_dict
+
+
 # class
 class AudioLoader:
     def __init__(self, sample_rate) -> None:
@@ -243,68 +302,11 @@ class BaseLightningDataModule(LightningDataModule):
         ], 'please check the device argument.\ndevice: {}\nvalid: {}'.format(
             device, ['cpu', 'cuda'])
         self.pin_memory = device == 'cuda' and torch.cuda.is_available()
-        self.transforms_dict = self.parse_transforms(
+        self.transforms_dict = parse_transforms(
             transforms_config=transforms_config)
-        self.target_transforms_dict = self.parse_target_transforms(
+        self.target_transforms_dict = parse_target_transforms(
             target_transforms_config=target_transforms_config, classes=classes)
         self.val_size = 0.2
-
-    def parse_transforms(self, transforms_config):
-        if transforms_config is None:
-            return {'train': None, 'val': None, 'test': None, 'predict': None}
-        transforms_dict = defaultdict(list)
-        for stage in transforms_config.keys():
-            if transforms_config[stage] is None:
-                transforms_dict[stage] = None
-                continue
-            for name, value in transforms_config[stage].items():
-                if name in ['DigitalFilter', 'PadWaveform']:
-                    name = name
-                elif name in dir(torchvision.transforms):
-                    name = 'torchvision.transforms.{}'.format(name)
-                elif name in dir(torchaudio.transforms):
-                    name = 'torchaudio.transforms.{}'.format(name)
-                if value is None:
-                    transforms_dict[stage].append(eval('{}()'.format(name)))
-                else:
-                    if type(value) is dict:
-                        transform_arguments = []
-                        for a, b in value.items():
-                            if type(b) is str:
-                                arg = '{}="{}"'.format(a, b)
-                            else:
-                                arg = '{}={}'.format(a, b)
-                            transform_arguments.append(arg)
-                        transform_arguments = ','.join(transform_arguments)
-                        value = transform_arguments
-                    transforms_dict[stage].append(
-                        eval('{}({})'.format(name, value)))
-            transforms_dict[stage] = torchvision.transforms.Compose(
-                transforms_dict[stage])
-        return transforms_dict
-
-    def parse_target_transforms(self, target_transforms_config, classes):
-        if target_transforms_config is None:
-            return {'train': None, 'val': None, 'test': None, 'predict': None}
-        target_transforms_dict = {}
-        for stage in target_transforms_config.keys():
-            if target_transforms_config[stage] is None:
-                target_transforms_dict[stage] = None
-                continue
-            for name, value in target_transforms_config[stage].items():
-                if type(value) is dict:
-                    target_transform_arguments = []
-                    for a, b in value.items():
-                        if a == 'num_classes' and b is None:
-                            b = len(classes)
-                        arg = '{}={}'.format(a, b)
-                        target_transform_arguments.append(arg)
-                    target_transform_arguments = ','.join(
-                        target_transform_arguments)
-                    value = target_transform_arguments
-                target_transforms_dict[stage] = eval('{}({})'.format(
-                    name, value))
-        return target_transforms_dict
 
     def train_dataloader(
             self
