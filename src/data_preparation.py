@@ -1,5 +1,4 @@
 # import
-import argparse
 from typing import Any, Optional, Callable, Union, Tuple, List, Dict
 import numpy as np
 from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder
@@ -20,65 +19,6 @@ import torch
 from os.path import join
 from torch.utils.data import random_split, DataLoader
 from os import makedirs
-
-
-# def
-def parse_transforms(transforms_config):
-    if transforms_config is None:
-        return {'train': None, 'val': None, 'test': None, 'predict': None}
-    transforms_dict = defaultdict(list)
-    for stage in transforms_config.keys():
-        if transforms_config[stage] is None:
-            transforms_dict[stage] = None
-            continue
-        for name, value in transforms_config[stage].items():
-            if name in ['DigitalFilter', 'PadWaveform']:
-                name = name
-            elif name in dir(torchvision.transforms):
-                name = 'torchvision.transforms.{}'.format(name)
-            elif name in dir(torchaudio.transforms):
-                name = 'torchaudio.transforms.{}'.format(name)
-            if value is None:
-                transforms_dict[stage].append(eval('{}()'.format(name)))
-            else:
-                if type(value) is dict:
-                    transform_arguments = []
-                    for a, b in value.items():
-                        if type(b) is str:
-                            arg = '{}="{}"'.format(a, b)
-                        else:
-                            arg = '{}={}'.format(a, b)
-                        transform_arguments.append(arg)
-                    transform_arguments = ','.join(transform_arguments)
-                    value = transform_arguments
-                transforms_dict[stage].append(
-                    eval('{}({})'.format(name, value)))
-        transforms_dict[stage] = torchvision.transforms.Compose(
-            transforms_dict[stage])
-    return transforms_dict
-
-
-def parse_target_transforms(target_transforms_config, classes):
-    if target_transforms_config is None:
-        return {'train': None, 'val': None, 'test': None, 'predict': None}
-    target_transforms_dict = {}
-    for stage in target_transforms_config.keys():
-        if target_transforms_config[stage] is None:
-            target_transforms_dict[stage] = None
-            continue
-        for name, value in target_transforms_config[stage].items():
-            if type(value) is dict:
-                target_transform_arguments = []
-                for a, b in value.items():
-                    if a == 'num_classes' and b is None:
-                        b = len(classes)
-                    arg = '{}={}'.format(a, b)
-                    target_transform_arguments.append(arg)
-                target_transform_arguments = ','.join(
-                    target_transform_arguments)
-                value = target_transform_arguments
-            target_transforms_dict[stage] = eval('{}({})'.format(name, value))
-    return target_transforms_dict
 
 
 # class
@@ -303,11 +243,68 @@ class BaseLightningDataModule(LightningDataModule):
         ], 'please check the device argument.\ndevice: {}\nvalid: {}'.format(
             device, ['cpu', 'cuda'])
         self.pin_memory = device == 'cuda' and torch.cuda.is_available()
-        self.transforms_dict = parse_transforms(
+        self.transforms_dict = self.parse_transforms(
             transforms_config=transforms_config)
-        self.target_transforms_dict = parse_target_transforms(
+        self.target_transforms_dict = self.parse_target_transforms(
             target_transforms_config=target_transforms_config, classes=classes)
         self.val_size = 0.2
+
+    def parse_transforms(self, transforms_config):
+        if transforms_config is None:
+            return {'train': None, 'val': None, 'test': None, 'predict': None}
+        transforms_dict = defaultdict(list)
+        for stage in transforms_config.keys():
+            if transforms_config[stage] is None:
+                transforms_dict[stage] = None
+                continue
+            for name, value in transforms_config[stage].items():
+                if name in ['DigitalFilter', 'PadWaveform']:
+                    name = name
+                elif name in dir(torchvision.transforms):
+                    name = 'torchvision.transforms.{}'.format(name)
+                elif name in dir(torchaudio.transforms):
+                    name = 'torchaudio.transforms.{}'.format(name)
+                if value is None:
+                    transforms_dict[stage].append(eval('{}()'.format(name)))
+                else:
+                    if type(value) is dict:
+                        transform_arguments = []
+                        for a, b in value.items():
+                            if type(b) is str:
+                                arg = '{}="{}"'.format(a, b)
+                            else:
+                                arg = '{}={}'.format(a, b)
+                            transform_arguments.append(arg)
+                        transform_arguments = ','.join(transform_arguments)
+                        value = transform_arguments
+                    transforms_dict[stage].append(
+                        eval('{}({})'.format(name, value)))
+            transforms_dict[stage] = torchvision.transforms.Compose(
+                transforms_dict[stage])
+        return transforms_dict
+
+    def parse_target_transforms(self, target_transforms_config, classes):
+        if target_transforms_config is None:
+            return {'train': None, 'val': None, 'test': None, 'predict': None}
+        target_transforms_dict = {}
+        for stage in target_transforms_config.keys():
+            if target_transforms_config[stage] is None:
+                target_transforms_dict[stage] = None
+                continue
+            for name, value in target_transforms_config[stage].items():
+                if type(value) is dict:
+                    target_transform_arguments = []
+                    for a, b in value.items():
+                        if a == 'num_classes' and b is None:
+                            b = len(classes)
+                        arg = '{}={}'.format(a, b)
+                        target_transform_arguments.append(arg)
+                    target_transform_arguments = ','.join(
+                        target_transform_arguments)
+                    value = target_transform_arguments
+                target_transforms_dict[stage] = eval('{}({})'.format(
+                    name, value))
+        return target_transforms_dict
 
     def train_dataloader(
             self
@@ -336,7 +333,7 @@ class BaseLightningDataModule(LightningDataModule):
 class ImageLightningDataModule(BaseLightningDataModule):
     def __init__(self, root, predefined_dataset, classes, max_samples,
                  batch_size, num_workers, device, transforms_config,
-                 target_transforms_config):
+                 target_transforms_config, dataset_class):
         super().__init__(root=root,
                          predefined_dataset=predefined_dataset,
                          classes=classes,
@@ -346,26 +343,34 @@ class ImageLightningDataModule(BaseLightningDataModule):
                          device=device,
                          transforms_config=transforms_config,
                          target_transforms_config=target_transforms_config)
+        self.dataset_class = dataset_class
 
     def prepare_data(self) -> None:
         # download predefined dataset
-        if self.predefined_dataset:
+        if self.predefined_dataset is not None:
             root = join(self.root, self.predefined_dataset)
-            eval(
-                'My{}(root=root, train=True, transform=None, target_transform=None, download=True)'
-                .format(self.predefined_dataset))
-            eval(
-                'My{}(root=root, train=False, transform=None, target_transform=None, download=True)'
-                .format(self.predefined_dataset))
+            self.dataset_class(root=root,
+                               train=True,
+                               transform=None,
+                               target_transform=None,
+                               download=True)
+            self.dataset_class(root=root,
+                               train=False,
+                               transform=None,
+                               target_transform=None,
+                               download=True)
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage == 'fit' or stage is None:
-            if self.predefined_dataset in ['MNIST', 'CIFAR10']:
+            if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
-                train_dataset = eval(
-                    'My{}(root=root, train=True, transform=self.transforms_dict["train"], target_transform=self.target_transforms_dict["train"], download=True)'
-                    .format(self.predefined_dataset))
+                train_dataset = self.dataset_class(
+                    root=root,
+                    train=True,
+                    transform=self.transforms_dict["train"],
+                    target_transform=self.target_transforms_dict["train"],
+                    download=True)
                 assert self.classes == train_dataset.classes, 'please check the classes argument.\nclasses: {}\nvalid: {}'.format(
                     self.classes, train_dataset.classes)
                 train_dataset.decrease_samples(max_samples=self.max_samples)
@@ -377,7 +382,7 @@ class ImageLightningDataModule(BaseLightningDataModule):
                     dataset=train_dataset, lengths=lengths)
             else:
                 # load dataset from root
-                self.train_dataset = MyImageFolder(
+                self.train_dataset = self.dataset_class(
                     root=join(self.root, 'train'),
                     transform=self.transforms_dict['train'],
                     target_transform=self.target_transforms_dict['train'])
@@ -385,24 +390,27 @@ class ImageLightningDataModule(BaseLightningDataModule):
                     self.classes, self.train_dataset.classes)
                 self.train_dataset.decrease_samples(
                     max_samples=self.max_samples)
-                self.val_dataset = MyImageFolder(
+                self.val_dataset = self.dataset_class(
                     root=join(self.root, 'val'),
                     transform=self.transforms_dict['val'],
                     target_transform=self.target_transforms_dict['val'])
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
 
         if stage == 'test' or stage is None:
-            if self.predefined_dataset in ['MNIST', 'CIFAR10']:
+            if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
-                self.test_dataset = eval(
-                    'My{}(root=root, train=False, transform=self.transforms_dict["test"], target_transform=self.target_transforms_dict["test"], download=True)'
-                    .format(self.predefined_dataset))
+                self.test_dataset = self.dataset_class(
+                    root=root,
+                    train=False,
+                    transform=self.transforms_dict["test"],
+                    target_transform=self.target_transforms_dict["test"],
+                    download=True)
                 self.test_dataset.decrease_samples(
                     max_samples=self.max_samples)
             else:
                 # load dataset from root
-                self.test_dataset = MyImageFolder(
+                self.test_dataset = self.dataset_class(
                     root=join(self.root, 'test'),
                     transform=self.transforms_dict['test'],
                     target_transform=self.target_transforms_dict['test'])
@@ -413,7 +421,7 @@ class ImageLightningDataModule(BaseLightningDataModule):
 class AudioLightningDataModule(BaseLightningDataModule):
     def __init__(self, root, predefined_dataset, classes, max_samples,
                  batch_size, num_workers, device, transforms_config,
-                 target_transforms_config, sample_rate):
+                 target_transforms_config, sample_rate, dataset_class):
         super().__init__(root=root,
                          predefined_dataset=predefined_dataset,
                          classes=classes,
@@ -424,25 +432,26 @@ class AudioLightningDataModule(BaseLightningDataModule):
                          transforms_config=transforms_config,
                          target_transforms_config=target_transforms_config)
         self.loader = AudioLoader(sample_rate=sample_rate)
+        self.dataset_class = dataset_class
 
     def prepare_data(self) -> None:
         # download predefined dataset
-        if self.predefined_dataset:
+        if self.predefined_dataset is not None:
             root = join(self.root, self.predefined_dataset)
             makedirs(name=root, exist_ok=True)
-            MySPEECHCOMMANDS(root=root,
-                             loader=None,
-                             transform=None,
-                             target_transform=None,
-                             download=True,
-                             subset=None)
+            self.dataset_class(root=root,
+                               loader=None,
+                               transform=None,
+                               target_transform=None,
+                               download=True,
+                               subset=None)
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage == 'fit' or stage is None:
-            if self.predefined_dataset in ['SPEECHCOMMANDS']:
+            if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
-                self.train_dataset = MySPEECHCOMMANDS(
+                self.train_dataset = self.dataset_class(
                     root=root,
                     loader=self.loader,
                     transform=self.transforms_dict['train'],
@@ -453,7 +462,7 @@ class AudioLightningDataModule(BaseLightningDataModule):
                     self.classes, self.train_dataset.classes)
                 self.train_dataset.decrease_samples(
                     max_samples=self.max_samples)
-                self.val_dataset = MySPEECHCOMMANDS(
+                self.val_dataset = self.dataset_class(
                     root=root,
                     loader=self.loader,
                     transform=self.transforms_dict['val'],
@@ -463,7 +472,7 @@ class AudioLightningDataModule(BaseLightningDataModule):
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
             else:
                 # load dataset from root
-                self.train_dataset = MyAudioFolder(
+                self.train_dataset = self.dataset_class(
                     root=join(self.root, 'train'),
                     loader=self.loader,
                     transform=self.transforms_dict['train'],
@@ -472,7 +481,7 @@ class AudioLightningDataModule(BaseLightningDataModule):
                     self.classes, self.train_dataset.classes)
                 self.train_dataset.decrease_samples(
                     max_samples=self.max_samples)
-                self.val_dataset = MyAudioFolder(
+                self.val_dataset = self.dataset_class(
                     root=join(self.root, 'val'),
                     loader=self.loader,
                     transform=self.transforms_dict['val'],
@@ -480,10 +489,10 @@ class AudioLightningDataModule(BaseLightningDataModule):
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
 
         if stage == 'test' or stage is None:
-            if self.predefined_dataset in ['SPEECHCOMMANDS']:
+            if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
-                self.test_dataset = MySPEECHCOMMANDS(
+                self.test_dataset = self.dataset_class(
                     root=root,
                     loader=self.loader,
                     transform=self.transforms_dict['test'],
@@ -494,209 +503,10 @@ class AudioLightningDataModule(BaseLightningDataModule):
                     max_samples=self.max_samples)
             else:
                 # load dataset from root
-                self.test_dataset = MyAudioFolder(
+                self.test_dataset = self.dataset_class(
                     root=join(self.root, 'test'),
                     loader=self.loader,
                     transform=self.transforms_dict['test'],
                     target_transform=self.target_transforms_dict['test'])
                 self.test_dataset.decrease_samples(
                     max_samples=self.max_samples)
-
-
-if __name__ == '__main__':
-    # project parameters
-    project_parameters = {
-        'root': './data',
-        'max_samples': None,
-        'batch_size': 32,
-        'num_workers': 0,
-        'device': 'cpu',
-        'target_transforms_config': {
-            'train': {
-                'LabelSmoothing': {
-                    'alpha': 0.2,
-                    'num_classes': None
-                }
-            },
-            'val': {
-                'OneHotEncoder': {
-                    'num_classes': None
-                }
-            },
-            'test': {
-                'OneHotEncoder': {
-                    'num_classes': None
-                }
-            }
-        }
-    }
-    project_parameters = argparse.Namespace(**project_parameters)
-
-    # create image datamodule
-    project_parameters.predefined_dataset = 'MNIST'
-    project_parameters.classes = [
-        '0 - zero', '1 - one', '2 - two', '3 - three', '4 - four', '5 - five',
-        '6 - six', '7 - seven', '8 - eight', '9 - nine'
-    ]
-    project_parameters.transforms_config = {
-        'train': {
-            'Resize': [224, 224],
-            'ColorJitter': None,
-            'RandomRotation': 90,
-            'RandomHorizontalFlip': None,
-            'RandomVerticalFlip': None,
-            'ToTensor': None,
-            'RandomErasing': None
-        },
-        'val': {
-            'Resize': [224, 224],
-            'ColorJitter': None,
-            'RandomRotation': 90,
-            'RandomHorizontalFlip': None,
-            'RandomVerticalFlip': None,
-            'ToTensor': None
-        },
-        'test': {
-            'Resize': [224, 224],
-            'ColorJitter': None,
-            'RandomRotation': 90,
-            'RandomHorizontalFlip': None,
-            'RandomVerticalFlip': None,
-            'ToTensor': None
-        },
-        'predict': {
-            'Resize': [224, 224],
-            'ColorJitter': None,
-            'RandomRotation': 90,
-            'RandomHorizontalFlip': None,
-            'RandomVerticalFlip': None,
-            'ToTensor': None
-        }
-    }
-    image_datamodule = ImageLightningDataModule(
-        root=project_parameters.root,
-        predefined_dataset=project_parameters.predefined_dataset,
-        classes=project_parameters.classes,
-        max_samples=project_parameters.max_samples,
-        batch_size=project_parameters.batch_size,
-        num_workers=project_parameters.num_workers,
-        device=project_parameters.device,
-        transforms_config=project_parameters.transforms_config,
-        target_transforms_config=project_parameters.target_transforms_config)
-
-    # prepare data
-    image_datamodule.prepare_data()
-
-    # set up data
-    image_datamodule.setup()
-
-    # get train, validation, test dataset
-    train_dataset = image_datamodule.train_dataset
-    val_dataset = image_datamodule.val_dataset
-    test_dataset = image_datamodule.test_dataset
-
-    # get the first sample and target in the train dataset
-    x, y = train_dataset[0]
-
-    # display the dimension of sample and target
-    print('the dimension of sample: {}'.format(x.shape))
-    print('the dimension of target: {}'.format(
-        y.shape if type(y) is not int else 1))
-
-    # create audio datamodule
-    project_parameters.predefined_dataset = 'SPEECHCOMMANDS'
-    project_parameters.classes = [
-        'backward', 'bed', 'bird', 'cat', 'dog', 'down', 'eight', 'five',
-        'follow', 'forward', 'four', 'go', 'happy', 'house', 'learn', 'left',
-        'marvin', 'nine', 'no', 'off', 'on', 'one', 'right', 'seven', 'sheila',
-        'six', 'stop', 'three', 'tree', 'two', 'up', 'visual', 'wow', 'yes',
-        'zero'
-    ]
-    project_parameters.transforms_config = {
-        'train': {
-            'PadWaveform': {
-                'max_waveform_length': 16000
-            },
-            'MelSpectrogram': {
-                'sample_rate': 16000,
-                'n_fft': 1024,
-                'hop_length': 512,
-                'n_mels': 64
-            },
-            'AmplitudeToDB': None,
-            'Resize': [224, 224],
-            'RandomErasing': {
-                'value': -100
-            }
-        },
-        'val': {
-            'PadWaveform': {
-                'max_waveform_length': 16000
-            },
-            'MelSpectrogram': {
-                'sample_rate': 16000,
-                'n_fft': 1024,
-                'hop_length': 512,
-                'n_mels': 64
-            },
-            'AmplitudeToDB': None,
-            'Resize': [224, 224]
-        },
-        'test': {
-            'PadWaveform': {
-                'max_waveform_length': 16000
-            },
-            'MelSpectrogram': {
-                'sample_rate': 16000,
-                'n_fft': 1024,
-                'hop_length': 512,
-                'n_mels': 64
-            },
-            'AmplitudeToDB': None,
-            'Resize': [224, 224]
-        },
-        'predict': {
-            'PadWaveform': {
-                'max_waveform_length': 16000
-            },
-            'MelSpectrogram': {
-                'sample_rate': 16000,
-                'n_fft': 1024,
-                'hop_length': 512,
-                'n_mels': 64
-            },
-            'AmplitudeToDB': None,
-            'Resize': [224, 224]
-        }
-    }
-    project_parameters.sample_rate = 16000
-    audio_datamodule = AudioLightningDataModule(
-        root=project_parameters.root,
-        predefined_dataset=project_parameters.predefined_dataset,
-        classes=project_parameters.classes,
-        max_samples=project_parameters.max_samples,
-        batch_size=project_parameters.batch_size,
-        num_workers=project_parameters.num_workers,
-        device=project_parameters.device,
-        transforms_config=project_parameters.transforms_config,
-        target_transforms_config=project_parameters.target_transforms_config,
-        sample_rate=project_parameters.sample_rate)
-
-    # prepare data
-    audio_datamodule.prepare_data()
-
-    # set up data
-    audio_datamodule.setup()
-
-    # get train, validation, test dataset
-    train_dataset = audio_datamodule.train_dataset
-    val_dataset = audio_datamodule.val_dataset
-    test_dataset = audio_datamodule.test_dataset
-
-    # get the first sample and target in the train dataset
-    x, y = train_dataset[0]
-
-    # display the dimension of sample and target
-    print('the dimension of sample: {}'.format(x.shape))
-    print('the dimension of target: {}'.format(
-        y.shape if type(y) is not int else 1))
