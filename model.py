@@ -1,4 +1,4 @@
-#import
+# import
 from pytorch_lightning import LightningModule
 import sys
 from os.path import dirname, basename
@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 
 
-#def
+# def
 def load_from_checkpoint(device, checkpoint_path, model):
     device = device if device == 'cuda' and torch.cuda.is_available(
     ) else 'cpu'
@@ -47,7 +47,7 @@ def load_from_checkpoint_for_supervised_model(
     return model
 
 
-#class
+# class
 class BaseModel(LightningModule):
     def __init__(self, optimizers_config, lr, lr_schedulers_config) -> None:
         super().__init__()
