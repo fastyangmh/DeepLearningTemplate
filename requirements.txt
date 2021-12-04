@@ -1,0 +1,7 @@
+ipython>=7.30.1
+ruamel.yaml>=0.17.17
+numpy>=1.21.4
+torchvision>=0.11.1
+torchaudio>=0.10.0
+pytorch-lightning>=1.4.9
+ray[tune]>=1.9.0
