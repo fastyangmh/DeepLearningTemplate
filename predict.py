@@ -1,4 +1,4 @@
-#import
+# import
 from torch.utils.data import Dataset
 from glob import glob
 from os.path import join
@@ -6,7 +6,7 @@ from typing import TypeVar
 T_co = TypeVar('T_co', covariant=True)
 
 
-#class
+# class
 class BaseDataset(Dataset):
     def __init__(self, root, extensions, loader, transform) -> None:
         super().__init__()

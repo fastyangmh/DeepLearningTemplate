@@ -21,7 +21,7 @@ from torch.utils.data import random_split, DataLoader
 from os import makedirs
 
 
-#def
+# def
 def parse_transforms(transforms_config):
     if transforms_config is None:
         return {'train': None, 'val': None, 'test': None, 'predict': None}

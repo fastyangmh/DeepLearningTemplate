@@ -1,10 +1,10 @@
-#import
+# import
 from pytorch_lightning import seed_everything, Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping
 import torch
 
 
-#class
+# class
 class BaseTrain:
     def __init__(self, seed) -> None:
         seed_everything(seed=seed)

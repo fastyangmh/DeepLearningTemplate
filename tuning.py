@@ -1,8 +1,8 @@
-#import
+# import
 from ray import tune
 
 
-#class
+# class
 class BaseTuning:
     def __init__(self) -> None:
         pass
