@@ -5,8 +5,7 @@ from os.path import dirname
 
 #class
 class BasePredictGUI:
-    def __init__(self, classes, extensions) -> None:
-        self.classes = classes
+    def __init__(self, extensions) -> None:
         self.extensions = extensions
         self.filepath = None
 
@@ -43,3 +42,9 @@ class BasePredictGUI:
                                                                self.extensions)
                                                               ])
         self.filepath_label.config(text='filepath: {}'.format(self.filepath))
+
+    def recognize(self):
+        pass
+
+    def run(self):
+        self.window.mainloop()

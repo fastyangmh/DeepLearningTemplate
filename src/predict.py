@@ -55,13 +55,3 @@ class AudioPredictDataset(BaseDataset):
                          extensions=('.wav'),
                          loader=loader,
                          transform=transform)
-
-
-class BasePredict:
-    def __init__(self, device, batch_size, num_workers, classes,
-                 loader) -> None:
-        self.device = device
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.classes = classes
-        self.loader = loader
