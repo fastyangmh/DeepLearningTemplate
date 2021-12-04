@@ -17,6 +17,36 @@ def load_from_checkpoint(device, checkpoint_path, model):
     return model
 
 
+def load_from_checkpoint_for_supervised_model(
+    device,
+    checkpoint_path,
+    classes,
+    model,
+):
+    device = device if device == 'cuda' and torch.cuda.is_available(
+    ) else 'cpu'
+    map_location = torch.device(device=device)
+    checkpoint = torch.load(f=checkpoint_path, map_location=map_location)
+    # change the number of output
+    for key in checkpoint['state_dict'].keys():
+        if 'classifier.bias' in key or 'classifier.weight' in key:
+            if checkpoint['state_dict'][key].shape[0] != len(classes):
+                temp = checkpoint['state_dict'][key]
+                checkpoint['state_dict'][key] = torch.stack([temp.mean(0)] *
+                                                            len(classes), 0)
+    # change the weight of loss function
+    if model.loss_function.weight is None:
+        if 'loss_function.weight' in checkpoint['state_dict']:
+            # delete loss_function.weight in the checkpoint
+            del checkpoint['state_dict']['loss_function.weight']
+    else:
+        # override loss_function.weight with model.loss_function.weight
+        checkpoint['state_dict'][
+            'loss_function.weight'] = model.loss_function.weight
+    model.load_state_dict(checkpoint['state_dict'])
+    return model
+
+
 #class
 class BaseModel(LightningModule):
     def __init__(self, optimizers_config, lr, lr_schedulers_config) -> None:
