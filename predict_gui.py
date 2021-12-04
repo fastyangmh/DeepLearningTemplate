@@ -1,9 +1,9 @@
-#import
+# import
 from tkinter import Tk, Button, Label, filedialog
 from os.path import dirname
 
 
-#class
+# class
 class BasePredictGUI:
     def __init__(self, extensions) -> None:
         self.extensions = extensions
