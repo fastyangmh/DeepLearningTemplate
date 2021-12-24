@@ -376,8 +376,10 @@ class ImageLightningDataModule(BaseLightningDataModule):
                 assert self.classes == train_dataset.classes, 'please check the classes argument.\nclasses: {}\nvalid: {}'.format(
                     self.classes, train_dataset.classes)
                 train_dataset.decrease_samples(max_samples=self.max_samples)
-                lengths = (np.array([1 - self.val_size, self.val_size]) *
-                           len(train_dataset)).astype(int)
+                lengths = np.array([
+                    np.ceil((1 - self.val_size) * len(train_dataset)),
+                    np.floor(self.val_size * len(train_dataset))
+                ]).astype(int)
                 # it cannot assign target_transform of validation to val_dataset after random splitting,
                 # because it will overwrite the target_transform of train
                 self.train_dataset, self.val_dataset = random_split(
