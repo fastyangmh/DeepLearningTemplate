@@ -268,11 +268,12 @@ class MyAudioFolder(DatasetFolder):
     def __init__(self,
                  root: str,
                  loader: Callable[[str], Any],
+                 extensions=('.wav', '.flac'),
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None) -> None:
         super().__init__(root=root,
                          loader=loader,
-                         extensions=('.wav'),
+                         extensions=extensions,
                          transform=transform,
                          target_transform=target_transform)
 

@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 from glob import glob
 from os.path import join
 from typing import TypeVar
+
 T_co = TypeVar('T_co', covariant=True)
 
 
@@ -36,10 +37,17 @@ class BaseDataset(Dataset):
 
 
 class ImagePredictDataset(BaseDataset):
-    def __init__(self, root, loader, transform, color_space) -> None:
+    def __init__(
+        self,
+        root,
+        loader,
+        transform,
+        color_space,
+        extensions=('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
+                    '.tiff', '.webp')
+    ) -> None:
         super().__init__(root=root,
-                         extensions=('.jpg', '.jpeg', '.png', '.ppm', '.bmp',
-                                     '.pgm', '.tif', '.tiff', '.webp'),
+                         extensions=extensions,
                          loader=loader,
                          transform=transform)
         self.color_space = color_space
@@ -50,8 +58,8 @@ class ImagePredictDataset(BaseDataset):
 
 
 class AudioPredictDataset(BaseDataset):
-    def __init__(self, root, loader, transform) -> None:
+    def __init__(self, root, loader, transform, extensions=('.wav')) -> None:
         super().__init__(root=root,
-                         extensions=('.wav'),
+                         extensions=extensions,
                          loader=loader,
                          transform=transform)
