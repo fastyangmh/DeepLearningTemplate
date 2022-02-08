@@ -18,7 +18,7 @@ class BaseDataset(Dataset):
             samples
         ), 'please check if the root and extensions argument. there does not exist any files with extension in the root.\nroot: {}\nextensions: {}'.format(
             root, extensions)
-        self.samples = samples
+        self.samples = sorted(samples)
         self.loader = loader
         self.transform = transform
 
