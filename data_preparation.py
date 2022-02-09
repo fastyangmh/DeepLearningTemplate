@@ -17,8 +17,14 @@ from PIL import Image
 from pytorch_lightning import LightningDataModule
 import torch
 from os.path import join
-from torch.utils.data import random_split, DataLoader
+from torch.utils.data import random_split, DataLoader, Dataset
 from os import makedirs
+from sklearn.datasets import load_breast_cancer
+from glob import glob
+import pandas as pd
+from typing import TypeVar
+
+T_co = TypeVar('T_co', covariant=True)
 
 
 # def
@@ -248,6 +254,99 @@ class MySPEECHCOMMANDS(SPEECHCOMMANDS):
         return sample, target
 
 
+class MyBreastCancerDataset(Dataset):
+    # NOTE: this dataset contains only training and validation datasets and the training and validation of ratio is 8:2
+    def __init__(self, train, transform, target_transform) -> None:
+        super().__init__()
+        self.data = load_breast_cancer().data
+        self.targets = load_breast_cancer().target
+        self.classes = list(load_breast_cancer().target_names)
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+        l = len(self.data)
+        if train:
+            self.data = self.data[:int(l * 0.8)]
+            self.targets = self.targets[:int(l * 0.8)]
+        else:
+            self.data = self.data[int(l * 0.8):]
+            self.targets = self.targets[int(l * 0.8):]
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index) -> T_co:
+        sample = self.data[index]
+        target = self.targets[index]
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        return sample, target
+
+    def decrease_samples(self, max_samples):
+        if max_samples is not None:
+            index = random.sample(population=range(len(self.data)),
+                                  k=max_samples)
+            self.data = self.data[index]
+            self.targets = self.targets[index]
+
+
+class MySeriesFolder(Dataset):
+    def __init__(self,
+                 root: str,
+                 loader: Callable[[str], Any],
+                 extensions: Optional[Tuple[str, ...]] = None,
+                 transform: Optional[Callable] = None,
+                 target_transform: Optional[Callable] = None) -> None:
+        super().__init__()
+        self.root = root
+        self.loader = loader
+        #TODO: support multiple extensions
+        assert extensions.count(
+            '.'
+        ) == 1 and '.csv' in extensions, 'currently, only support CSV extension.'
+        self.extensions = [extensions]
+        self.transform = transform
+        self.target_transform = target_transform
+        self.samples = self.find_files(filename='sample')
+        self.targets = self.find_files(filename='target')
+        self.classes = self.find_classes(filename='classes.txt')
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+
+    def find_files(self, filename):
+        for ext in self.extensions:
+            temp = []
+            for f in sorted(glob(join(self.root, f'{filename}*{ext}'))):
+                temp.append(self.loader(f))
+        return pd.concat(temp).values
+
+    def find_classes(self, filename):
+        return list(
+            np.loadtxt(join(self.root, f'{filename}'),
+                       dtype=str,
+                       delimiter='\n'))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index) -> T_co:
+        sample = self.samples[index]
+        target = self.targets[index]
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        return sample, target
+
+    def decrease_samples(self, max_samples):
+        if max_samples is not None:
+            index = random.sample(population=range(len(self.samples)),
+                                  k=max_samples)
+            self.samples = self.samples[index]
+            self.targets = self.targets[index]
+
+
 class MyImageFolder(ImageFolder):
     def __init__(self,
                  root: str,
@@ -290,9 +389,12 @@ class BaseLightningDataModule(LightningDataModule):
         super().__init__()
         self.root = root
         assert predefined_dataset in [
-            'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', None
+            'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset', None
         ], 'please check the predefined_dataset argument.\npredefined_dataset: {}\nvalid: {}'.format(
-            predefined_dataset, ['MNIST', 'CIFAR10', 'SPEECHCOMMANDS', None])
+            predefined_dataset, [
+                'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset',
+                None
+            ])
         self.predefined_dataset = predefined_dataset
         self.classes = classes
         self.max_samples = max_samples
@@ -513,5 +615,76 @@ class AudioLightningDataModule(BaseLightningDataModule):
                     loader=self.loader,
                     transform=self.transforms_dict['test'],
                     target_transform=self.target_transforms_dict['test'])
+                self.test_dataset.decrease_samples(
+                    max_samples=self.max_samples)
+
+
+class SeriesLightningDataModule(BaseLightningDataModule):
+    def __init__(self, root, predefined_dataset, classes, max_samples,
+                 batch_size, num_workers, device, transforms_config,
+                 target_transforms_config, dataset_class):
+        super().__init__(root, predefined_dataset, classes, max_samples,
+                         batch_size, num_workers, device, transforms_config,
+                         target_transforms_config)
+        self.loader = pd.read_csv
+        self.dataset_class = dataset_class
+
+    def prepare_data(self) -> None:
+        pass
+
+    def setup(self, stage: Optional[str] = None) -> None:
+        if stage == 'fit' or stage is None:
+            if self.predefined_dataset is not None:
+                # load predefined dataset
+                self.train_dataset = self.dataset_class(
+                    train=True,
+                    transform=self.transforms_dict['train'],
+                    target_transform=self.target_transforms_dict['train'])
+                assert self.classes == self.train_dataset.classes, 'please check the classes argument.\nclasses: {}\nvalid: {}'.format(
+                    self.classes, self.train_dataset.classes)
+                self.train_dataset.decrease_samples(
+                    max_samples=self.max_samples)
+                self.val_dataset = self.dataset_class(
+                    train=False,
+                    transform=self.transforms_dict['val'],
+                    target_transform=self.target_transforms_dict['val'])
+                self.val_dataset.decrease_samples(max_samples=self.max_samples)
+            else:
+                # load dataset from root
+                self.train_dataset = self.dataset_class(
+                    root=join(self.root, 'train'),
+                    loader=self.loader,
+                    extensions=('.csv'),
+                    transform=self.transforms_dict['train'],
+                    target_transform=self.target_transforms_dict['train'])
+                assert self.classes == self.train_dataset.classes, 'please check the classes argument.\nclasses: {}\nvalid: {}'.format(
+                    self.classes, self.train_dataset.classes)
+                self.train_dataset.decrease_samples(
+                    max_samples=self.max_samples)
+                self.val_dataset = self.dataset_class(
+                    root=join(self.root, 'val'),
+                    loader=self.loader,
+                    extensions=('.csv'),
+                    transform=self.transforms_dict['val'],
+                    target_transform=self.target_transforms_dict['val'])
+                self.val_dataset.decrease_samples(max_samples=self.max_samples)
+
+        if stage == 'test' or stage is None:
+            if self.predefined_dataset is not None:
+                # load predefined dataset
+                self.test_dataset = self.dataset_class(
+                    train=False,
+                    transform=self.transforms_dict['test'],
+                    target_transform=self.target_transforms_dict['test'])
+                self.test_dataset.decrease_samples(
+                    max_samples=self.max_samples)
+            else:
+                # load dataset from root
+                self.test_dataset = self.dataset_class(
+                    root=join(self.root, 'test'),
+                    loader=self.loader,
+                    extensions=('.csv'),
+                    transform=self.transforms_dict['test'],
+                    target_transform=self.target_transforms_dict['val'])
                 self.test_dataset.decrease_samples(
                     max_samples=self.max_samples)
