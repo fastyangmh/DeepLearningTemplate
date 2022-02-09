@@ -311,6 +311,9 @@ class MySeriesFolder(Dataset):
         self.target_transform = target_transform
         self.samples = self.find_files(filename='sample')
         self.targets = self.find_files(filename='target')
+        #reduce unnecessary dimension in self.targets
+        self.targets = self.targets[:, 0] if self.targets.shape[
+            -1] == 1 else self.targets
         self.classes = self.find_classes(filename='classes.txt')
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
 
