@@ -260,6 +260,9 @@ class MyBreastCancerDataset(Dataset):
         super().__init__()
         self.data = load_breast_cancer().data
         self.targets = load_breast_cancer().target
+        #convert the data type of self.data and self.targets
+        self.data = self.data.astype(np.float32)
+        self.targets = self.targets.astype(np.int32)
         self.classes = list(load_breast_cancer().target_names)
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
         l = len(self.data)
@@ -311,6 +314,9 @@ class MySeriesFolder(Dataset):
         self.target_transform = target_transform
         self.samples = self.find_files(filename='sample')
         self.targets = self.find_files(filename='target')
+        #convert the data type of self.samples and self.targets
+        self.samples = self.samples.astype(np.float32)
+        self.targets = self.targets.astype(np.int32)
         #reduce unnecessary dimension in self.targets
         self.targets = self.targets[:, 0] if self.targets.shape[
             -1] == 1 else self.targets
