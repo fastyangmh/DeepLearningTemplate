@@ -1,4 +1,5 @@
 # import
+import numpy as np
 from torch.utils.data import Dataset
 from glob import glob
 from os.path import join
@@ -63,3 +64,26 @@ class AudioPredictDataset(BaseDataset):
                          extensions=extensions,
                          loader=loader,
                          transform=transform)
+
+
+class SeriesPredictDataset(Dataset):
+    def __init__(self, filepath, loader, transform) -> None:
+        super().__init__()
+        self.filepath = filepath
+        self.loader = loader
+        self.transform = transform
+        self.samples = self.find_files()
+        #convert data type of self.samples
+        self.samples = self.samples.astype(np.float32)
+
+    def find_files(self):
+        return self.loader(self.filepath).values
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index) -> T_co:
+        sample = self.samples[index]
+        if self.transform is not None:
+            sample = self.transform(sample)
+        return sample
