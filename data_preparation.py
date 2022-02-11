@@ -93,8 +93,12 @@ class AudioLoader:
 
     def __call__(self, path) -> Any:
         sample, sample_rate = torchaudio.load(path)
-        assert self.sample_rate == sample_rate, 'please check the sample_rate argument.\nsample_rate: {}\nvalid: {}'.format(
-            self.sample_rate, sample_rate)
+        if self.sample_rate != sample_rate:
+            print(
+                'please check the sample_rate argument, although the waveform will automatically be resampled, you should check the sample_rate argument.\nsample_rate: {}\nvalid: {}'
+                .format(self.sample_rate, sample_rate))
+            sample = torchaudio.transforms.Resample(
+                orig_freq=sample_rate, new_freq=self.sample_rate)(sample)
         return sample
 
 
