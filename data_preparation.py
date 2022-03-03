@@ -1,9 +1,9 @@
 # import
-from typing import Any, Optional, Callable, Union, Tuple, List, Dict
+from typing import Any, Optional, Callable, Union, Tuple, List, Dict, TypeVar
 import numpy as np
 from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder
 import random
-from torchaudio.datasets import SPEECHCOMMANDS
+from torchaudio.datasets import SPEECHCOMMANDS, CMUARCTIC
 from pathlib import Path
 from torch import Tensor
 import os
@@ -22,7 +22,6 @@ from os import makedirs
 from sklearn.datasets import load_breast_cancer
 from glob import glob
 import pandas as pd
-from typing import TypeVar
 
 T_co = TypeVar('T_co', covariant=True)
 
@@ -258,6 +257,62 @@ class MySPEECHCOMMANDS(SPEECHCOMMANDS):
         return sample, target
 
 
+class MyCMUARCTICForVC(Dataset):
+    def __init__(
+        self,
+        root,
+        transform,
+        download,
+        subset,
+        loader=None,
+        target_transform=None,
+    ) -> None:
+        super().__init__()
+        self.male_dataset = CMUARCTIC(root=root, url='aew', download=download)
+        self.female_dataset = CMUARCTIC(root=root,
+                                        url='slt',
+                                        download=download)
+        assert len(self.male_dataset) == len(
+            self.female_dataset
+        ), f'the male and female dataset have difference lengths.\nthe length of male dataset: {len(self.male_dataset)}\nthe length of female dataset: {len(self.female_dataset)}'
+        l = len(self.male_dataset)
+        if subset == 'training':
+            self.male_dataset._walker = self.male_dataset._walker[:int(l *
+                                                                       0.8)]
+            self.female_dataset._walker = self.female_dataset._walker[:int(l *
+                                                                           0.8
+                                                                           )]
+        else:
+            self.male_dataset._walker = self.male_dataset._walker[int(l *
+                                                                      0.8):]
+            self.female_dataset._walker = self.female_dataset._walker[int(l *
+                                                                          0.8
+                                                                          ):]
+        self.transform = transform
+        self.classes = ['aew', 'slt']
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+
+    def __len__(self):
+        return len(self.male_dataset) + len(self.female_dataset)
+
+    def __getitem__(self, index):
+        sample1 = self.male_dataset[index][0]
+        sample2 = self.female_dataset[index][0]
+        if self.transform:
+            sample1 = self.transform(sample1)
+            sample2 = self.transform(sample2)
+        return sample1, sample2
+
+    def decrease_samples(self, max_samples):
+        if max_samples is not None:
+            index = random.sample(population=range(len(self.male_dataset)),
+                                  k=max_samples)
+            self.male_dataset._walker = np.array(
+                self.male_dataset._walker)[index]
+            self.female_dataset._walker = np.array(
+                self.female_dataset._walker)[index]
+
+
 class MyBreastCancerDataset(Dataset):
     # NOTE: this dataset contains only training and validation datasets and the training and validation of ratio is 8:2
     def __init__(self, train, transform, target_transform) -> None:
@@ -402,11 +457,12 @@ class BaseLightningDataModule(LightningDataModule):
         super().__init__()
         self.root = root
         assert predefined_dataset in [
-            'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset', None
+            'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset',
+            'CMUARCTICForVC', None
         ], 'please check the predefined_dataset argument.\npredefined_dataset: {}\nvalid: {}'.format(
             predefined_dataset, [
                 'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset',
-                None
+                'CMUARCTICForVC', None
             ])
         self.predefined_dataset = predefined_dataset
         self.classes = classes
