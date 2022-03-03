@@ -258,15 +258,13 @@ class MySPEECHCOMMANDS(SPEECHCOMMANDS):
 
 
 class MyCMUARCTICForVC(Dataset):
-    def __init__(
-        self,
-        root,
-        transform,
-        download,
-        subset,
-        loader=None,
-        target_transform=None,
-    ) -> None:
+    def __init__(self,
+                 root,
+                 transform,
+                 download,
+                 subset,
+                 loader=None,
+                 target_transform=None) -> None:
         super().__init__()
         self.male_dataset = CMUARCTIC(root=root, url='aew', download=download)
         self.female_dataset = CMUARCTIC(root=root,
@@ -293,7 +291,7 @@ class MyCMUARCTICForVC(Dataset):
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
 
     def __len__(self):
-        return len(self.male_dataset) + len(self.female_dataset)
+        return len(self.male_dataset)
 
     def __getitem__(self, index):
         sample1 = self.male_dataset[index][0]
