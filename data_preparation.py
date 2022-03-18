@@ -776,6 +776,6 @@ class SeriesLightningDataModule(BaseLightningDataModule):
                     loader=self.loader,
                     extensions=('.csv'),
                     transform=self.transforms_dict['test'],
-                    target_transform=self.target_transforms_dict['val'])
+                    target_transform=self.target_transforms_dict['test'])
                 self.test_dataset.decrease_samples(
                     max_samples=self.max_samples)
