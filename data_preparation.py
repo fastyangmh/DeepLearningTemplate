@@ -36,9 +36,7 @@ def parse_transforms(transforms_config):
             transforms_dict[stage] = None
             continue
         for name, value in transforms_config[stage].items():
-            if name in ['DigitalFilter', 'PadWaveform']:
-                name = name
-            elif name in dir(torchvision.transforms):
+            if name in dir(torchvision.transforms):
                 name = 'torchvision.transforms.{}'.format(name)
             elif name in dir(torchaudio.transforms):
                 name = 'torchaudio.transforms.{}'.format(name)
