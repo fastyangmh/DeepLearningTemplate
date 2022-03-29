@@ -592,7 +592,8 @@ class ImageLightningDataModule(BaseLightningDataModule):
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
 
         if stage == 'test' or stage is None:
-            self.set_train_and_val_dataset_transform_to_test()
+            if stage == 'test':
+                self.set_train_and_val_dataset_transform_to_test()
             if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
@@ -685,7 +686,8 @@ class AudioLightningDataModule(BaseLightningDataModule):
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
 
         if stage == 'test' or stage is None:
-            self.set_train_and_val_dataset_transform_to_test()
+            if stage == 'test':
+                self.set_train_and_val_dataset_transform_to_test()
             if self.predefined_dataset is not None:
                 # load predefined dataset
                 root = join(self.root, self.predefined_dataset)
@@ -760,7 +762,8 @@ class SeriesLightningDataModule(BaseLightningDataModule):
                 self.val_dataset.decrease_samples(max_samples=self.max_samples)
 
         if stage == 'test' or stage is None:
-            self.set_train_and_val_dataset_transform_to_test()
+            if stage == 'test':
+                self.set_train_and_val_dataset_transform_to_test()
             if self.predefined_dataset is not None:
                 # load predefined dataset
                 self.test_dataset = self.dataset_class(
