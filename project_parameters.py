@@ -7,7 +7,7 @@ from os.path import isfile, isdir, abspath
 
 
 def load_yaml(filepath):
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         config = safe_load(f)
     assert not (config is None), 'the {} file is empty.'.format(filepath)
     return config
