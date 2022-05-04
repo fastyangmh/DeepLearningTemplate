@@ -494,12 +494,12 @@ class BaseLightningDataModule(LightningDataModule):
         super().__init__()
         self.root = root
         assert predefined_dataset in [
-            'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset',
-            'CMUARCTICForVC', None
+            'MNIST', 'CIFAR10', 'VOCSegmentation', 'SPEECHCOMMANDS',
+            'BreastCancerDataset', 'CMUARCTICForVC', None
         ], 'please check the predefined_dataset argument.\npredefined_dataset: {}\nvalid: {}'.format(
             predefined_dataset, [
-                'MNIST', 'CIFAR10', 'SPEECHCOMMANDS', 'BreastCancerDataset',
-                'CMUARCTICForVC', None
+                'MNIST', 'CIFAR10', 'VOCSegmentation', 'SPEECHCOMMANDS',
+                'BreastCancerDataset', 'CMUARCTICForVC', None
             ])
         self.predefined_dataset = predefined_dataset
         self.classes = classes
