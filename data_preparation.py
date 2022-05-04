@@ -1,7 +1,7 @@
 # import
 from typing import Any, Optional, Callable, Union, Tuple, List, Dict, TypeVar
 import numpy as np
-from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder
+from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder, VOCSegmentation
 import random
 from torchaudio.datasets import SPEECHCOMMANDS, CMUARCTIC
 from pathlib import Path
@@ -214,6 +214,47 @@ class MyCIFAR10(CIFAR10):
                                   k=max_samples)
             self.data = self.data[index]
             self.targets = np.array(self.targets)[index]
+
+
+class MyVOCSegmentation(Dataset):
+    def __init__(self,
+                 root: str,
+                 train: bool = True,
+                 transform: Optional[Callable] = None,
+                 target_transform: Optional[Callable] = None,
+                 download: bool = False) -> None:
+        year = '2007'
+        image_set = 'train' if train else 'test'
+        dataset = VOCSegmentation(root=root,
+                                  year=year,
+                                  image_set=image_set,
+                                  download=download,
+                                  transform=transform,
+                                  target_transform=target_transform)
+        self.images, self.masks = dataset.images, dataset.masks
+        self.transform = transform
+        self.target_transform = target_transform
+        self.classes = ['image', 'mask']
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index) -> T_co:
+        img = Image.open(self.images[index]).convert("RGB")
+        target = Image.open(self.masks[index])
+        if self.transform is not None:
+            img = self.transform(img)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        return img, target
+
+    def decrease_samples(self, max_samples):
+        if max_samples is not None:
+            index = random.sample(population=range(len(self.images)),
+                                  k=max_samples)
+            self.images = np.array(self.images)[index]
+            self.masks = np.array(self.masks)[index]
 
 
 class MySPEECHCOMMANDS(SPEECHCOMMANDS):
