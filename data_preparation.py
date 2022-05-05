@@ -233,7 +233,7 @@ class MyVOCSegmentation(Dataset):
                                   target_transform=target_transform)
         self.images, self.masks = dataset.images, dataset.masks
         self.transform = transform
-        self.target_transform = target_transform
+        self.target_transform = target_transform    #this is unnecessary in the segmentation task
         self.classes = ['image', 'mask']
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
 
@@ -245,8 +245,7 @@ class MyVOCSegmentation(Dataset):
         target = Image.open(self.masks[index])
         if self.transform is not None:
             img = self.transform(img)
-        if self.target_transform is not None:
-            target = self.target_transform(target)
+            target = self.transform(target)
         return img, target
 
     def decrease_samples(self, max_samples):
