@@ -161,7 +161,13 @@ class OneHotEncoder:
         self.num_classes = num_classes
 
     def __call__(self, target) -> Any:
-        return np.eye(self.num_classes)[target]
+        if type(target) == torch.Tensor:
+            target = torch.eye(self.num_classes)[
+                target]  #the target dimension is (1, w, h, num_classes)
+            return target[0].permute(
+                2, 0, 1)  #the target dimension is (num_classes, w, h)
+        else:
+            return np.eye(self.num_classes)[target]
 
 
 class LabelSmoothing(OneHotEncoder):
@@ -233,8 +239,13 @@ class MyVOCSegmentation(Dataset):
                                   target_transform=target_transform)
         self.images, self.masks = dataset.images, dataset.masks
         self.transform = transform
-        self.target_transform = target_transform    #this is unnecessary in the segmentation task
-        self.classes = ['image', 'mask']
+        self.target_transform = target_transform
+        self.classes = [
+            'background', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+            'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse',
+            'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
+            'tvmonitor'
+        ]
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
 
     def __len__(self):
@@ -244,8 +255,15 @@ class MyVOCSegmentation(Dataset):
         img = Image.open(self.images[index]).convert("RGB")
         target = Image.open(self.masks[index])
         if self.transform is not None:
+            state = torch.get_rng_state()
             img = self.transform(img)
+            torch.set_rng_state(new_state=state)
             target = self.transform(target)
+        if target.dtype == torch.float32:
+            target = (target * 255).long()
+            target[target == 255] = 0
+        if self.target_transform:
+            target = self.target_transform(target)
         return img, target
 
     def decrease_samples(self, max_samples):
