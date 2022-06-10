@@ -1,7 +1,7 @@
 # import
 from typing import Any, Optional, Callable, Union, Tuple, List, Dict, TypeVar
 import numpy as np
-from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder, VOCSegmentation
+from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder, VOCSegmentation, VOCDetection
 import random
 from torchaudio.datasets import SPEECHCOMMANDS, CMUARCTIC
 from pathlib import Path
@@ -10,9 +10,6 @@ import os
 from collections import defaultdict
 import torchvision
 import torchaudio
-import torch.nn as nn
-import torch.nn.functional as F
-from torchaudio.functional import lowpass_biquad, highpass_biquad
 from PIL import Image
 from pytorch_lightning import LightningDataModule
 import torch
@@ -22,8 +19,16 @@ from os import makedirs
 from sklearn.datasets import load_breast_cancer
 from glob import glob
 import pandas as pd
+import albumentations
+import selfdefined_transforms
 
 T_co = TypeVar('T_co', covariant=True)
+
+#parameters
+PREDEFINED_DATASET = [
+    'MNIST', 'CIFAR10', 'VOCSegmentation', 'SPEECHCOMMANDS',
+    'BreastCancerDataset', 'CMUARCTICForVC', 'VOCDetection', None
+]
 
 
 # def
@@ -32,14 +37,29 @@ def parse_transforms(transforms_config):
         return {'train': None, 'val': None, 'test': None, 'predict': None}
     transforms_dict = defaultdict(list)
     for stage in transforms_config.keys():
+        compose_type = ''
         if transforms_config[stage] is None:
             transforms_dict[stage] = None
             continue
+        compose_type = []
         for name, value in transforms_config[stage].items():
-            if name in dir(torchvision.transforms):
+            #transform name
+            transfrom_type, name = name.split('.')
+            if transfrom_type == 'albumentations' and name in dir(
+                    albumentations):
+                name = 'albumentations.{}'.format(name)
+            elif transfrom_type == 'torchvision' and name in dir(
+                    torchvision.transforms):
                 name = 'torchvision.transforms.{}'.format(name)
-            elif name in dir(torchaudio.transforms):
+            elif transfrom_type == 'torchaudio' and name in dir(
+                    torchaudio.transforms):
                 name = 'torchaudio.transforms.{}'.format(name)
+            elif transfrom_type == 'selfdefined' and name in dir(
+                    selfdefined_transforms):
+                #my defined transform in this file
+                name = 'selfdefined_transforms.{}'.format(name)
+            compose_type.append(transfrom_type)
+            #transform value
             if value is None:
                 transforms_dict[stage].append(eval('{}()'.format(name)))
             else:
@@ -55,8 +75,13 @@ def parse_transforms(transforms_config):
                     value = transform_arguments
                 transforms_dict[stage].append(
                     eval('{}({})'.format(name, value)))
-        transforms_dict[stage] = torchvision.transforms.Compose(
-            transforms_dict[stage])
+        if 'albumentations' in compose_type:
+            transforms_dict[stage] = albumentations.Compose(
+                transforms_dict[stage],
+                bbox_params=albumentations.BboxParams(format='yolo'))
+        else:
+            transforms_dict[stage] = torchvision.transforms.Compose(
+                transforms_dict[stage])
     return transforms_dict
 
 
@@ -69,6 +94,13 @@ def parse_target_transforms(target_transforms_config, classes):
             target_transforms_dict[stage] = None
             continue
         for name, value in target_transforms_config[stage].items():
+            #transform name
+            transfrom_type, name = name.split('.')
+            if transfrom_type == 'selfdefined' and name in dir(
+                    selfdefined_transforms):
+                #my defined transform in this file
+                name = 'selfdefined_transforms.{}'.format(name)
+            #transform value
             if type(value) is dict:
                 target_transform_arguments = []
                 for a, b in value.items():
@@ -81,6 +113,16 @@ def parse_target_transforms(target_transforms_config, classes):
                 value = target_transform_arguments
             target_transforms_dict[stage] = eval('{}({})'.format(name, value))
     return target_transforms_dict
+
+
+def yolo_collate_fn(batch):
+    tensors, targets = zip(*batch)
+    for idx, v in enumerate(targets):
+        if len(v):
+            v[:, 0] = idx
+    tensors = np.stack(arrays=tensors, axis=0)
+    targets = np.concatenate(targets, 0)
+    return torch.from_numpy(tensors), torch.from_numpy(targets)
 
 
 # class
@@ -97,87 +139,6 @@ class AudioLoader:
             sample = torchaudio.transforms.Resample(
                 orig_freq=sample_rate, new_freq=self.sample_rate)(sample)
         return sample
-
-
-class DigitalFilter(nn.Module):
-    def __init__(self, filter_type, sample_rate, cutoff_freq) -> None:
-        super().__init__()
-        assert filter_type in [
-            'bandpass', 'lowpass', 'highpass', None
-        ], 'please check the filter_type argument.\nfilter_type: {}\nvalid: {}'.format(
-            filter_type, ['bandpass', 'lowpass', 'highpass', None])
-        if type(cutoff_freq) != list:
-            cutoff_freq = [cutoff_freq]
-        cutoff_freq = np.array(cutoff_freq)
-        # check if the cutoff frequency satisfied Nyquist theorem
-        assert not any(
-            cutoff_freq / (sample_rate * 0.5) > 1
-        ), 'please check the cutoff_freq argument.\ncutoff_freq: {}\nvalid: {}'.format(
-            cutoff_freq, [1, sample_rate // 2])
-        self.filter_type = filter_type
-        self.sample_rate = sample_rate
-        self.cutoff_freq = cutoff_freq
-
-    def __call__(self, waveform):
-        if self.filter_type is None or self.filter_type == 'None':
-            return waveform
-        elif self.filter_type == 'bandpass':
-            waveform = lowpass_biquad(waveform=waveform,
-                                      sample_rate=self.sample_rate,
-                                      cutoff_freq=max(self.cutoff_freq))
-            waveform = highpass_biquad(waveform=waveform,
-                                       sample_rate=self.sample_rate,
-                                       cutoff_freq=min(self.cutoff_freq))
-        elif self.filter_type == 'lowpass':
-            waveform = lowpass_biquad(waveform=waveform,
-                                      sample_rate=self.sample_rate,
-                                      cutoff_freq=max(self.cutoff_freq))
-        elif self.filter_type == 'highpass':
-            waveform = highpass_biquad(waveform=waveform,
-                                       sample_rate=self.sample_rate,
-                                       cutoff_freq=min(self.cutoff_freq))
-        return waveform
-
-
-class PadWaveform(nn.Module):
-    def __init__(self, max_waveform_length) -> None:
-        super().__init__()
-        self.max_waveform_length = max_waveform_length
-
-    def forward(self, waveform):
-        # the dimension of waveform is (channels, length)
-        channels, length = waveform.shape
-        diff = self.max_waveform_length - length
-        if diff >= 0:
-            pad = (int(np.ceil(diff / 2)), int(np.floor(diff / 2)))
-            waveform = F.pad(input=waveform, pad=pad)
-        else:
-            waveform = waveform[:, :self.max_waveform_length]
-        return waveform
-
-
-class OneHotEncoder:
-    def __init__(self, num_classes) -> None:
-        self.num_classes = num_classes
-
-    def __call__(self, target) -> Any:
-        if type(target) == torch.Tensor:
-            target = torch.eye(self.num_classes)[
-                target]  #the target dimension is (1, w, h, num_classes)
-            return target[0].permute(
-                2, 0, 1)  #the target dimension is (num_classes, w, h)
-        else:
-            return np.eye(self.num_classes)[target]
-
-
-class LabelSmoothing(OneHotEncoder):
-    def __init__(self, alpha, num_classes) -> None:
-        super().__init__(num_classes=num_classes)
-        self.alpha = alpha
-
-    def __call__(self, target) -> Any:
-        target = super().__call__(target)
-        return (1 - self.alpha) * target + (self.alpha / self.num_classes)
 
 
 class MyMNIST(MNIST):
@@ -272,6 +233,87 @@ class MyVOCSegmentation(Dataset):
                                   k=max_samples)
             self.images = np.array(self.images)[index]
             self.masks = np.array(self.masks)[index]
+
+
+class MyVOCDetection(Dataset):
+    def __init__(self,
+                 root: str,
+                 train: bool = True,
+                 transform: Optional[Callable] = None,
+                 target_transform: Optional[Callable] = None,
+                 download: bool = False) -> None:
+        super().__init__()
+        year = '2007'
+        image_set = 'train' if train else 'test'
+        self.dataset = VOCDetection(root=root,
+                                    year=year,
+                                    image_set=image_set,
+                                    download=download,
+                                    transform=None,
+                                    target_transform=None)
+        self.transform = transform
+        self.target_transform = target_transform
+        self.classes = [
+            'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car',
+            'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
+            'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+        ]
+        self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index) -> T_co:
+        img, target = self.dataset[
+            index]  #RGB order and dimension is (width, height, channels)
+        img = np.array(img)
+        size = target['annotation']['size']
+        width, height, chans = int(size['width']), int(size['height']), int(
+            size['depth'])
+        object = target['annotation']['object']
+        bboxes = []
+        for v in object:
+            name = v['name']
+            xyxy = np.array([int(bndbox) for bndbox in v['bndbox'].values()])
+            xywh = np.zeros_like(xyxy, dtype=float)
+            xywh[0] = (xyxy[0] + xyxy[2]) / (2 * width)
+            xywh[1] = (xyxy[1] + xyxy[3]) / (2 * height)
+            xywh[2] = (xyxy[2] - xyxy[0]) / width
+            xywh[3] = (xyxy[3] - xyxy[1]) / height
+            bboxes.append([*xywh, self.class_to_idx[name]])
+        if self.transform:
+            img, bboxes = self.transform(image=img, bboxes=bboxes).values()
+        bboxes = np.array(bboxes)
+        if len(bboxes):
+            #[[x, y, w, h, c]] -> [[c, x, y, w, h]]
+            bboxes = np.append(arr=bboxes[:, -1:],
+                               values=bboxes[:, :-1],
+                               axis=-1)
+        if self.target_transform and len(bboxes):
+            labels = bboxes[:, 0].astype(int)
+            labels = self.target_transform(labels)
+            bboxes = np.append(arr=labels, values=bboxes[:, 1:], axis=-1)
+        if len(bboxes):
+            #add target image index for build_targets()
+            bboxes = np.append(arr=np.zeros(shape=(len(bboxes), 1)),
+                               values=bboxes,
+                               axis=-1)
+        else:
+            #image_index + one hot encoder length + xywh if self.target_transform
+            #else image_index + c + xywh
+            l = 25 if self.target_transform else 6
+            bboxes = np.zeros(shape=(0, l))
+        img = img.transpose(
+            2, 0, 1)  #transpose dimension to (channels, width, height)
+        bboxes = bboxes.astype(np.float32)
+        return img, bboxes
+
+    def decrease_samples(self, max_samples):
+        if max_samples is not None:
+            index = random.sample(population=range(len(self.dataset)),
+                                  k=max_samples)
+            self.dataset.images = np.array(self.dataset.images)[index]
+            self.dataset.targets = np.array(self.dataset.targets)[index]
 
 
 class MySPEECHCOMMANDS(SPEECHCOMMANDS):
@@ -510,14 +552,8 @@ class BaseLightningDataModule(LightningDataModule):
                  target_transforms_config):
         super().__init__()
         self.root = root
-        assert predefined_dataset in [
-            'MNIST', 'CIFAR10', 'VOCSegmentation', 'SPEECHCOMMANDS',
-            'BreastCancerDataset', 'CMUARCTICForVC', None
-        ], 'please check the predefined_dataset argument.\npredefined_dataset: {}\nvalid: {}'.format(
-            predefined_dataset, [
-                'MNIST', 'CIFAR10', 'VOCSegmentation', 'SPEECHCOMMANDS',
-                'BreastCancerDataset', 'CMUARCTICForVC', None
-            ])
+        assert predefined_dataset in PREDEFINED_DATASET, 'please check the predefined_dataset argument.\npredefined_dataset: {}\nvalid: {}'.format(
+            predefined_dataset, PREDEFINED_DATASET)
         self.predefined_dataset = predefined_dataset
         self.classes = classes
         self.max_samples = max_samples
@@ -838,3 +874,29 @@ class SeriesLightningDataModule(BaseLightningDataModule):
                     target_transform=self.target_transforms_dict['test'])
                 self.test_dataset.decrease_samples(
                     max_samples=self.max_samples)
+
+
+class YOLOImageLightningDataModule(ImageLightningDataModule):
+    def __init__(self, root, predefined_dataset, classes, max_samples,
+                 batch_size, num_workers, device, transforms_config,
+                 target_transforms_config, dataset_class):
+        super().__init__(root, predefined_dataset, classes, max_samples,
+                         batch_size, num_workers, device, transforms_config,
+                         target_transforms_config, dataset_class)
+
+    def train_dataloader(
+            self
+    ) -> Union[DataLoader, List[DataLoader], Dict[str, DataLoader]]:
+        dataloader = super().train_dataloader()
+        dataloader.collate_fn = yolo_collate_fn
+        return dataloader
+
+    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
+        dataloader = super().val_dataloader()
+        dataloader.collate_fn = yolo_collate_fn
+        return dataloader
+
+    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
+        dataloader = super().test_dataloader()
+        dataloader.collate_fn = yolo_collate_fn
+        return dataloader
