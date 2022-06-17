@@ -241,7 +241,8 @@ class MyVOCDetection(Dataset):
                  train: bool = True,
                  transform: Optional[Callable] = None,
                  target_transform: Optional[Callable] = None,
-                 download: bool = False) -> None:
+                 download: bool = False,
+                 image_size=None) -> None:
         super().__init__()
         year = '2007'
         image_set = 'train' if train else 'test'
@@ -259,20 +260,18 @@ class MyVOCDetection(Dataset):
             'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
         ]
         self.class_to_idx = {k: v for v, k in enumerate(self.classes)}
+        self.image_size = image_size
 
     def __len__(self):
         return len(self.dataset)
 
-    def __getitem__(self, index) -> T_co:
-        img, target = self.dataset[
-            index]  #RGB order and dimension is (width, height, channels)
-        img = np.array(img)
+    def get_bboxes(self, target):
         size = target['annotation']['size']
         width, height, chans = int(size['width']), int(size['height']), int(
             size['depth'])
-        object = target['annotation']['object']
+        objects = target['annotation']['object']
         bboxes = []
-        for v in object:
+        for v in objects:
             name = v['name']
             xyxy = np.array([int(bndbox) for bndbox in v['bndbox'].values()])
             xywh = np.zeros_like(xyxy, dtype=float)
@@ -280,15 +279,31 @@ class MyVOCDetection(Dataset):
             xywh[1] = (xyxy[1] + xyxy[3]) / (2 * height)
             xywh[2] = (xyxy[2] - xyxy[0]) / width
             xywh[3] = (xyxy[3] - xyxy[1]) / height
-            bboxes.append([*xywh, self.class_to_idx[name]])
+            bboxes.append([self.class_to_idx[name], *xywh])
+        return np.array(bboxes)
+
+    def __getitem__(self, index) -> T_co:
+        img, target = self.dataset[
+            index]  #RGB order and dimension is (width, height, channels)
+        img = np.array(img)  #the img dimension is (height, width, channels)
+        bboxes = self.get_bboxes(
+            target=target
+        )  #the bboxes dimension is (n_objects, bounding_box_info) [[c, x, y, w, h]]
         if self.transform:
-            img, bboxes = self.transform(image=img, bboxes=bboxes).values()
-        bboxes = np.array(bboxes)
-        if len(bboxes):
-            #[[x, y, w, h, c]] -> [[c, x, y, w, h]]
-            bboxes = np.append(arr=bboxes[:, -1:],
-                               values=bboxes[:, :-1],
-                               axis=-1)
+            if len(bboxes) == 0:
+                img, _ = self.transform(image=img,
+                                        bboxes=[[1e-10] * 4 + [0]]).values()
+            else:
+                bboxes = bboxes[:,
+                                [1, 2, 3, 4,
+                                 0]]  #[[c, x, y, w, h]] -> [[x, y, w, h, c]]
+                img, bboxes = self.transform(image=img, bboxes=bboxes).values()
+                bboxes = np.array(bboxes)
+                bboxes = bboxes[..., None] if len(bboxes) == 0 else bboxes
+                #[[x, y, w, h, c]] -> [[c, x, y, w, h]]
+                bboxes = bboxes[:, [4, 0, 1, 2, 3]]
+            size = max(img.shape[:-1])
+            assert size == self.image_size, f'the transformed image size not equal image_size in config.yml.\ntransformed image size: {size}\nimage_size in config.yml: {self.image_size}'
         if self.target_transform and len(bboxes):
             labels = bboxes[:, 0].astype(int)
             labels = self.target_transform(labels)
@@ -301,7 +316,8 @@ class MyVOCDetection(Dataset):
         else:
             #image_index + one hot encoder length + xywh if self.target_transform
             #else image_index + c + xywh
-            l = 25 if self.target_transform else 6
+            l = 1 + len(
+                self.classes) + 4 if self.target_transform else 1 + 1 + 4
             bboxes = np.zeros(shape=(0, l))
         img = img.transpose(
             2, 0, 1)  #transpose dimension to (channels, width, height)
