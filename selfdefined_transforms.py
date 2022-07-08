@@ -5,6 +5,7 @@ from torchaudio.functional import lowpass_biquad, highpass_biquad
 import numpy as np
 from typing import Any
 import torch
+import torchvision
 
 
 #class
@@ -70,13 +71,18 @@ class OneHotEncoder:
         self.num_classes = num_classes
 
     def __call__(self, target) -> Any:
-        if type(target) == torch.Tensor:
-            target = torch.eye(self.num_classes)[
-                target]  #the target dimension is (1, w, h, num_classes)
-            return target[0].permute(
-                2, 0, 1)  #the target dimension is (num_classes, w, h)
+        #target dimention should be (num_classes,) or a scaler
+        if type(target) != int and len(target) == self.num_classes:
+            return target
         else:
-            return np.eye(self.num_classes)[target]
+            if type(target) == torch.Tensor:
+                # this is only for mask image in the segmentation task
+                target = torch.eye(self.num_classes)[
+                    target]  #the target dimension is (1, w, h, num_classes)
+                return target[0].permute(
+                    2, 0, 1)  #the target dimension is (num_classes, w, h)
+            else:
+                return np.eye(self.num_classes)[target]
 
 
 class LabelSmoothing(OneHotEncoder):
@@ -87,3 +93,61 @@ class LabelSmoothing(OneHotEncoder):
     def __call__(self, target) -> Any:
         target = super().__call__(target)
         return (1 - self.alpha) * target + (self.alpha / self.num_classes)
+
+
+class ResizePadding(nn.Module):
+    def __init__(self,
+                 target_size: int,
+                 interpolation=torchvision.transforms.functional.
+                 InterpolationMode.BILINEAR,
+                 max_size=None,
+                 antialias=None) -> None:
+        super().__init__()
+        self.target_size = target_size
+        self.interpolation = interpolation
+        self.max_size = max_size
+        self.antialias = antialias
+
+    def forward(self, img):
+        w, h = img.size  #img is PIL image
+        ratio = min(self.target_size / w, self.target_size / h)
+        target_w, target_h = int(w * ratio), int(h * ratio)
+        img = torchvision.transforms.functional.resize(
+            img=img,
+            size=(target_h, target_w),
+            interpolation=self.interpolation,
+            max_size=self.max_size,
+            antialias=self.antialias)
+        img = torchvision.transforms.functional.to_tensor(
+            img)  #convert PIL image to tensor
+        diff_w = self.target_size - target_w
+        diff_h = self.target_size - target_h
+        pad = (int(np.ceil(diff_w / 2)), int(np.floor(diff_w / 2)),
+               int(np.ceil(diff_h / 2)), int(np.floor(diff_h / 2)))
+        img = F.pad(input=img, pad=pad)
+        return torchvision.transforms.functional.to_pil_image(
+            pic=img, mode=None)  #convert tensor to PIL image
+
+
+class PaddingResize(torchvision.transforms.Resize):
+    def __init__(self,
+                 size,
+                 interpolation=torchvision.transforms.functional.
+                 InterpolationMode.BILINEAR,
+                 max_size=None,
+                 antialias=None):
+        super().__init__(size, interpolation, max_size, antialias)
+
+    def forward(self, img):
+        w, h = img.size  #img is PIL image
+        img = torchvision.transforms.functional.to_tensor(
+            img)  #convert PIL image to tensor
+        target_size = max(w, h)
+        diff_w = target_size - w
+        diff_h = target_size - h
+        pad = (int(np.ceil(diff_w / 2)), int(np.floor(diff_w / 2)),
+               int(np.ceil(diff_h / 2)), int(np.floor(diff_h / 2)))
+        img = F.pad(input=img, pad=pad)
+        img = torchvision.transforms.functional.to_pil_image(
+            pic=img, mode=None)  #convert tensor to PIL image
+        return super().forward(img=img)
