@@ -72,15 +72,21 @@ class OneHotEncoder:
 
     def __call__(self, target) -> Any:
         #target dimention should be (num_classes,) or a scaler
-        if type(target) != int and len(target) == self.num_classes:
+        if isinstance(target, (np.ndarray, torch.Tensor,
+                               list)) and len(target) == self.num_classes:
             return target
         else:
-            if type(target) == torch.Tensor:
-                # this is only for mask image in the segmentation task
-                target = torch.eye(self.num_classes)[
-                    target]  #the target dimension is (1, w, h, num_classes)
-                return target[0].permute(
-                    2, 0, 1)  #the target dimension is (num_classes, w, h)
+            if isinstance(target, torch.Tensor):
+                if len(target.shape) > 1:
+                    # this is only for mask image in the segmentation task
+                    # assume the target dimension is (1, w, h)
+                    target = torch.eye(
+                        self.num_classes
+                    )[target]  #the target dimension is (1, w, h, num_classes)
+                    return target[0].permute(
+                        2, 0, 1)  #the target dimension is (num_classes, w, h)
+                else:
+                    return torch.eye(self.num_classes)[target]
             else:
                 return np.eye(self.num_classes)[target]
 
