@@ -1,6 +1,6 @@
 # import
 import argparse
-from ruamel.yaml import safe_load
+from yaml import safe_load
 from os.path import isfile, isdir, abspath
 
 # def
@@ -9,7 +9,7 @@ from os.path import isfile, isdir, abspath
 def load_yaml(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         config = safe_load(f)
-    assert not (config is None), 'the {} file is empty.'.format(filepath)
+    assert not (config is None), f'the {filepath} file is empty.'
     return config
 
 
@@ -17,7 +17,7 @@ def load_yaml(filepath):
 
 
 class ProjectParameters:
-    def __init__(self, ) -> None:
+    def __init__(self) -> None:
         self.parser = argparse.ArgumentParser(
             formatter_class=argparse.MetavarTypeHelpFormatter)
         self.parser.add_argument(
@@ -48,65 +48,80 @@ class ProjectParameters:
             '--str_list_kwargs',
             type=str,
             help=
-            'the keyword whose value type is a list of strings. please note that this only applies to modifying the classes parameter.'
+            'the keyword whose value type is a list of strings. please use the "|" symbol as separator, if you have multiple keys to modify.'
         )
         self.parser.add_argument(
             '--num_list_kwargs',
             type=str,
             help=
-            'the keyword whose value type is a list of numbers. please note that this only applies to modifying the gpus parameter.'
+            'the keyword whose value type is a list of numbers. please use the "|" symbol as separator, if you have multiple keys to modify.'
         )
 
-    def parse_kwargs(self, kwargs, kwargs_type, check):
+    def parse_kwargs(self, kwargs: str, kwargs_type: str):
         kwargs_dict = {}
         if kwargs_type in ['str_list', 'num_list']:
-            key, value = kwargs.split(sep='=', maxsplit=1)
-            if kwargs_type == 'str_list':
-                value = value.split(',')
-            elif kwargs_type == 'num_list':
-                value = [eval(v) for v in value.split(',')]
-            if check:
-                # check key if exist in the config
-                assert key in list(
-                    self.config.keys()
-                ), 'please check if the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
-                    key, list(self.config.keys()))
-            exec('kwargs_dict["{}"]={}'.format(key, value))
+            for args in kwargs.split(sep='|'):
+                key, value = args.split(sep='=', maxsplit=1)
+                if kwargs_type == 'str_list':
+                    value = value.split(',')
+                elif kwargs_type == 'num_list':
+                    value = [eval(v) for v in value.split(',')]
+                exec(f'kwargs_dict["{key}"]={value}')
         else:
             for v in kwargs.split(','):
                 key, value = v.split(sep='=', maxsplit=1)
-                if check:
-                    # check key if exist in the config
-                    assert key in list(
-                        self.config.keys()
-                    ), 'please check if the keyword argument exists in the configuration.\nkwargs: {}\nvalid: {}'.format(
-                        key, list(self.config.keys()))
-                if kwargs_type == 'str':
-                    if value == 'None':
-                        exec('kwargs_dict["{}"]={}'.format(key, value))
-                    else:
-                        exec('kwargs_dict["{}"]="{}"'.format(key, value))
+                if value in ['None', 'none', 'null', None]:
+                    exec(f'kwargs_dict["{key}"]={value}')
+                elif kwargs_type == 'str':
+                    exec(f'kwargs_dict["{key}"]="{value}"')
                 elif kwargs_type == 'num':
-                    exec('kwargs_dict["{}"]={}'.format(key, value))
+                    exec(f'kwargs_dict["{key}"]={value}')
                 elif kwargs_type == 'bool':
-                    exec('kwargs_dict["{}"]=bool({})'.format(key, value))
+                    exec(f'kwargs_dict["{key}"]=bool({value})')
         return kwargs_dict
 
-    def get_kwargs(self, args):
+    def get_kwargs(self, args: argparse.Namespace):
         kwargs_dict = {}
         for key, value in vars(args).items():
             if value is not None and 'kwargs' in key:
                 kwargs_type = key.rsplit('_', 1)[0]
                 new_dict = self.parse_kwargs(kwargs=value,
-                                             kwargs_type=kwargs_type,
-                                             check=args.dont_check)
+                                             kwargs_type=kwargs_type)
                 kwargs_dict.update(new_dict)
         return kwargs_dict
 
     def set_abspath(self):
         for k, v in self.config.items():
-            if type(v) == str and (isfile(v) or isdir(v)):
+            if isinstance(v, str) and (isfile(v) or isdir(v)):
                 self.config[k] = abspath(v)
+
+    def get_keys(self, keys: list = []):
+        stack = [['', self.config]]
+        while stack:
+            root, dic = stack.pop()
+            for key, value in dic.items():
+                r = root + f'-{key}' if root else key
+                if isinstance(value, dict):
+                    keys.append(r)
+                    stack.append([r, value])
+                else:
+                    keys.append(r)
+        return keys
+
+    def is_valid_kwargs(self, kwargs_dict: dict, check: bool):
+        if check:
+            for key in kwargs_dict.keys():
+                assert key in self.config_keys, f'please check if the keyword argument exists in the configuration.\nkwargs: {key}\nvalid: {self.config_keys}'
+
+    def update(self, kwargs_dict: dict):
+        for key, value in kwargs_dict.items():
+            if key in self.config_keys:
+                key = key.split('-')
+                key = ("['{}']" * len(key)).format(*key)
+                try:
+                    exec(f'self.config{key}={value}')
+                except:
+                    exec(f'self.config{key}="{value}"')
 
     def parse(self):
         args = self.parser.parse_args()
@@ -115,8 +130,12 @@ class ProjectParameters:
         else:
             self.config = {}
         self.config['config'] = args.config
+        self.config_keys = self.get_keys(keys=[])
         kwargs_dict = self.get_kwargs(args=args)
-        self.config.update(kwargs_dict)
+        self.is_valid_kwargs(kwargs_dict=kwargs_dict, check=args.dont_check)
+        self.update(kwargs_dict=kwargs_dict)
+        if self.config['mode'] == 'tuning':
+            self.config['config_keys'] = self.config_keys
         self.set_abspath()
         return argparse.Namespace(**self.config)
 
