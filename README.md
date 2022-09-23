@@ -6,4 +6,5 @@ This repository is my deep learning template. It will be a submodule in many of 
 
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
