@@ -46,6 +46,8 @@ def parse_transforms(transforms_config: Dict):
                     selfdefined_transforms):
                 #the transformations I have defined in this file
                 name = f'selfdefined_transforms.{name}'
+            else:
+                assert False, f'please check the transform name in {stage} transforms_config.\n the error name: {transform_type}.{name}'
             compose_type.append(transform_type)
 
             #transform value
