@@ -20,7 +20,7 @@ from sklearn.datasets import load_breast_cancer
 from glob import glob
 import pandas as pd
 import albumentations
-import selfdefined_transforms
+from deeplearningtemplate import selfdefined_transforms
 
 T_co = TypeVar('T_co', covariant=True)
 
