@@ -90,15 +90,15 @@ class BaseLightningDataModule(LightningDataModule, ABC):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
-                 classes: List, batch_size: int, num_workers: int, device: str,
+                 classes: List, batch_size: int, num_workers: int, accelerator: str,
                  random_seed: int, **kwargs):
         super().__init__()
         assert predefined_dataset in PREDEFINED_DATASET, f'please check the predefined_dataset argument.\npredefined_dataset: {predefined_dataset}\nvalid: {PREDEFINED_DATASET}'
         self.predefined_dataset = predefined_dataset
-        assert device in [
-            'cpu', 'cuda'
-        ], f'please check the device argument.\ndevice: {device}\nvalid: {["cpu","cuda"]}'
-        self.pin_memory = device == 'cuda' and torch.cuda.is_available()
+        assert accelerator in [
+            'cpu', 'gpu'
+        ], f'please check the accelerator argument.\ndevice: {accelerator}\nvalid: {["cpu","gpu"]}'
+        self.pin_memory = accelerator == 'gpu' and torch.cuda.is_available()
         self.root = root
         self.dataset_cls = dataset_cls
         self.transforms_dict = parse_transforms(
@@ -236,11 +236,11 @@ class ImageLightningDataModule(BaseLightningDataModule):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
-                 classes: List, batch_size: int, num_workers: int, device: str,
+                 classes: List, batch_size: int, num_workers: int, accelerator: str,
                  **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
-                         max_samples, classes, batch_size, num_workers, device,
+                         max_samples, classes, batch_size, num_workers, accelerator,
                          **kwargs)
 
     def prepare_data(self) -> None:
@@ -281,11 +281,11 @@ class AudioLightningDataModule(BaseLightningDataModule):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
-                 classes: List, batch_size: int, num_workers: int, device: str,
+                 classes: List, batch_size: int, num_workers: int, accelerator: str,
                  random_seed: int, **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
-                         max_samples, classes, batch_size, num_workers, device,
+                         max_samples, classes, batch_size, num_workers, accelerator,
                          random_seed, **kwargs)
         self.loader = kwargs.get('loader')
 
@@ -326,11 +326,11 @@ class SeriesLightningDataModule(BaseLightningDataModule):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
-                 classes: List, batch_size: int, num_workers: int, device: str,
+                 classes: List, batch_size: int, num_workers: int, accelerator: str,
                  random_seed: int, **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
-                         max_samples, classes, batch_size, num_workers, device,
+                         max_samples, classes, batch_size, num_workers, accelerator,
                          random_seed, **kwargs)
         self.loader = kwargs.get('loader')
 
@@ -358,11 +358,11 @@ class YOLOImageLightningDataModule(ImageLightningDataModule):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
-                 classes: List, batch_size: int, num_workers: int, device: str,
+                 classes: List, batch_size: int, num_workers: int, accelerator: str,
                  **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
-                         max_samples, classes, batch_size, num_workers, device,
+                         max_samples, classes, batch_size, num_workers, accelerator,
                          **kwargs)
 
     def data_loader(self,
