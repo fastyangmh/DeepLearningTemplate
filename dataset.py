@@ -461,7 +461,7 @@ class MyAudioFolder(DatasetFolder):
                                          k=max_samples)
 
 
-#parameters
+#global parameters
 GENRAL_DATASET = ['MyAudioFolder', 'MyImageFolder', 'MySeriesFolder']
 PREDEFINED_DATASET = [
     name[2:]

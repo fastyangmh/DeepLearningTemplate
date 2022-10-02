@@ -14,10 +14,10 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 try:
     from . import selfdefined_transforms
-    from .dataset import PREDEFINED_DATASET, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+    from .dataset import PREDEFINED_DATASET, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 except:
     import selfdefined_transforms
-    from dataset import PREDEFINED_DATASET, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+    from dataset import PREDEFINED_DATASET, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 
 
 # def
