@@ -15,10 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import inspect
-try:
-    from .dataset import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
-except:
-    from dataset import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+from . import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 
 
 # class
@@ -127,12 +124,12 @@ class SupervisedModel(BaseModel):
         self.last_activation_function = self.parse_last_activation_function(
             last_activation_function_name=project_parameters.
             last_activation_function_name)
-        if project_parameters.data_extensions in [
+        if project_parameters.file_extensions in [
                 'IMG_EXTENSIONS', 'AUDIO_EXTENSIONS', 'SERIES_EXTENSIONS'
         ]:
-            self.extensions = eval(project_parameters.data_extensions)
+            self.extensions = eval(project_parameters.file_extensions)
         else:
-            self.extensions = project_parameters.data_extensions
+            self.extensions = project_parameters.file_extensions
         self.loss_function = self.parse_loss_function(
             loss_function_name=project_parameters.loss_function_name,
             weighted_loss=project_parameters.weighted_loss,

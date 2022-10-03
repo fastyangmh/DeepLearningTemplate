@@ -46,8 +46,8 @@ class Trainer:
                 EarlyStopping(monitor='val_loss',
                               patience=patience,
                               mode='min'))
-        if accelerator == 'gpu' and torch.cuda.is_available():
-            accelerator = 'gpu'
+        if accelerator == 'cuda' and torch.cuda.is_available():
+            accelerator = 'gpu'  #the accelerator value in pytorch lightning uses gpu instead of cuda
         else:
             accelerator = 'cpu'
         return pl.Trainer(

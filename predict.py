@@ -1,24 +1,32 @@
-# import
+#import
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
+from typing import Callable, Tuple, TypeVar, Any, Union
 from glob import glob
-from os.path import join
-from typing import TypeVar
+from os.path import join, splitext, isfile
+import argparse
+from . import create_model, parse_transforms, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+import torch
+from tqdm import tqdm
 
 T_co = TypeVar('T_co', covariant=True)
 
 
-# class
-class BaseDataset(Dataset):
-    def __init__(self, root, extensions, loader, transform) -> None:
+#class
+class PredictDataset(Dataset):
+    def __init__(self, root: str, extensions: Tuple, loader: Callable,
+                 transform: Callable) -> None:
         super().__init__()
-        samples = []
-        for ext in extensions:
-            samples += glob(join(root, '*{}'.format(ext)))
+        if isfile(root):
+            samples = [root]
+        else:
+            samples = [
+                f for f in glob(join(root, '*'))
+                if splitext(f)[-1] in extensions
+            ]
         assert len(
             samples
-        ), 'please check if the root and extensions argument. there does not exist any files with extension in the root.\nroot: {}\nextensions: {}'.format(
-            root, extensions)
+        ), f'please check the root and extensions argument. there does not exist any files with extension in the root.\nroot: {root}\nextensions: {extensions}'
         self.samples = sorted(samples)
         self.loader = loader
         self.transform = transform
@@ -26,64 +34,60 @@ class BaseDataset(Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def get_sample(self, path):
-        return self.loader(path)
-
-    def __getitem__(self, index) -> T_co:
+    def __getitem__(self, index: int) -> T_co:
         path = self.samples[index]
-        sample = self.get_sample(path=path)
+        sample = self.loader(path)
         if self.transform is not None:
             sample = self.transform(sample)
         return sample
 
 
-class ImagePredictDataset(BaseDataset):
-    def __init__(
-        self,
-        root,
-        loader,
-        transform,
-        color_space,
-        extensions=('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
-                    '.tiff', '.webp')
-    ) -> None:
-        super().__init__(root=root,
-                         extensions=extensions,
-                         loader=loader,
-                         transform=transform)
-        self.color_space = color_space
-
-    def get_sample(self, path):
-        sample = super().get_sample(path)
-        return sample.convert(mode=self.color_space)
-
-
-class AudioPredictDataset(BaseDataset):
-    def __init__(self, root, loader, transform, extensions=('.wav')) -> None:
-        super().__init__(root=root,
-                         extensions=extensions,
-                         loader=loader,
-                         transform=transform)
-
-
-class SeriesPredictDataset(Dataset):
-    def __init__(self, filepath, loader, transform) -> None:
-        super().__init__()
-        self.filepath = filepath
+class Predictor():
+    def __init__(self, project_parameters: argparse.Namespace,
+                 loader: Callable) -> None:
+        self.model = create_model(project_parameters=project_parameters).eval()
+        if project_parameters.accelerator == 'cuda' and torch.cuda.is_available(
+        ):
+            self.model = self.model.to(project_parameters.accelerator)
+            pin_memory = True
+        else:
+            pin_memory = False
+        self.transform = parse_transforms(
+            transforms_config=project_parameters.transforms_config)['predict']
         self.loader = loader
-        self.transform = transform
-        self.samples = self.find_files()
-        #convert data type of self.samples
-        self.samples = self.samples.astype(np.float32)
+        self.accelerator = project_parameters.accelerator
+        self.batch_size = project_parameters.batch_size
+        self.num_workers = project_parameters.num_workers
+        if project_parameters.file_extensions in [
+                'IMG_EXTENSIONS', 'AUDIO_EXTENSIONS', 'SERIES_EXTENSIONS'
+        ]:
+            self.extensions = eval(project_parameters.file_extensions)
+        else:
+            self.extensions = project_parameters.file_extensions
+        self.pin_memory = pin_memory
 
-    def find_files(self):
-        return self.loader(self.filepath).values
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, index) -> T_co:
-        sample = self.samples[index]
-        if self.transform is not None:
-            sample = self.transform(sample)
-        return sample
+    def __call__(self, inputs: Union[str, torch.Tensor]) -> Any:
+        result = []
+        if isinstance(inputs, str):
+            dataset = PredictDataset(root=inputs,
+                                     extensions=self.extensions,
+                                     loader=self.loader,
+                                     transform=self.transform)
+            data_loader = DataLoader(dataset=dataset,
+                                     batch_size=self.batch_size,
+                                     num_workers=self.num_workers,
+                                     pin_memory=self.pin_memory)
+            with torch.no_grad():
+                for x in tqdm(data_loader):
+                    if self.pin_memory:
+                        x = x.to(self.accelerator)
+                    result.append(self.model(x).tolist())
+        elif isinstance(inputs, torch.Tensor):
+            x = self.transform(inputs)
+            if self.pin_memory:
+                x = x.to(self.accelerator)
+            with torch.no_grad():
+                result.append(self.model(x[None]).tolist())
+        else:
+            assert 0, f'please check the inputs data type.\n the inputs data type: {type(inputs)}\nvalid: {["str","torch.Tensor"]}'
+        return np.concatenate(result, 0)

@@ -112,7 +112,7 @@ class ProjectParameters:
     def is_valid_kwargs(self, kwargs_dict: Dict, check: bool):
         if check:
             for key in kwargs_dict.keys():
-                assert key in self.config_keys, f'please check if the keyword argument exists in the configuration.\nkwargs: {key}\nvalid: {self.config_keys}'
+                assert key in self.config_keys, f'please check the keyword argument exists in the configuration.\nkwargs: {key}\nvalid: {self.config_keys}'
 
     def update(self, kwargs_dict: Dict):
         for key, value in kwargs_dict.items():
