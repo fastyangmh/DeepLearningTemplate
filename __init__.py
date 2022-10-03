@@ -4,3 +4,4 @@ from .data_preparation import parse_transforms, ImageLightningDataModule, AudioL
 from .model import create_model, SupervisedModel, VALID_MODEL
 from .train import Trainer
 from .predict import PredictDataset, Predictor
+from .predict_gui import PredictorGUI
