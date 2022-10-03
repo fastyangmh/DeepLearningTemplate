@@ -20,7 +20,7 @@ class DigitalFilter(nn.Module):
         if not isinstance(cutoff_freq, list):
             cutoff_freq = [cutoff_freq]
         cutoff_freq = np.array(cutoff_freq)
-        # check if the cutoff frequency satisfied Nyquist theorem
+        # check the cutoff frequency satisfied Nyquist theorem
         assert not any(
             cutoff_freq / (sample_rate * 0.5) > 1
         ), 'please check the cutoff_freq argument.\ncutoff_freq: {}\nvalid: {}'.format(
@@ -159,3 +159,12 @@ class PaddingResize(torchvision.transforms.Resize):
         img = torchvision.transforms.functional.to_pil_image(
             pic=img, mode=None)  #convert tensor to PIL image
         return super().forward(img=img)
+
+
+class ColorConverter(nn.Module):
+    def __init__(self, color_space: str) -> None:
+        super().__init__()
+        self.color_space = color_space
+
+    def forward(self, img):
+        return img.convert(mode=self.color_space)
