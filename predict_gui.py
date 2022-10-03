@@ -1,50 +1,38 @@
 # import
-from tkinter import Tk, Button, Label, filedialog
-from os.path import dirname
+from __future__ import annotations
+from . import Predictor
+import argparse
+from typing import Callable, Optional, List, Any
+import gradio as gr
+from gradio.components import Component
 
 
 # class
-class BasePredictGUI:
-    def __init__(self, extensions) -> None:
-        self.extensions = extensions
-        self.filepath = None
+class PredictorGUI:
+    def __init__(
+            self,
+            project_parameters: argparse.Namespace,
+            loader: Callable,
+            gradio_inputs: Optional[str | Component | List[str | Component]],
+            gradio_outputs: Optional[str | Component | List[str | Component]],
+            examples: Optional[List[Any] | List[List[Any]] | str] = None
+    ) -> None:
+        self.predictor = Predictor(project_parameters=project_parameters,
+                                   loader=loader)
+        self.gui = gr.Interface(fn=self.inference,
+                                inputs=gradio_inputs,
+                                outputs=gradio_outputs,
+                                examples=examples,
+                                cache_examples=True,
+                                live=True,
+                                interpretation='default')
+        self.classes = project_parameters.classes
 
-        # window
-        self.window = Tk()
-        self.window.geometry('{}x{}'.format(self.window.winfo_screenwidth(),
-                                            self.window.winfo_screenheight()))
-        self.window.title('Prediction GUI')
+    def inference(self, inputs):
+        prediction = self.predictor(
+            inputs=inputs)  #prediction dimension is (1, num_classes)
+        prediction = prediction[0]
+        return {cls: proba for cls, proba in zip(self.classes, prediction)}
 
-        # button
-        self.open_file_button = Button(master=self.window,
-                                       text='Open File',
-                                       command=self.open_file)
-        self.recognize_button = Button(master=self.window,
-                                       text='Recognize',
-                                       command=self.recognize)
-
-        # label
-        self.filepath_label = Label(master=self.window)
-        self.predicted_label = Label(master=self.window)
-        self.result_label = Label(master=self.window, font=(None, 50))
-
-    def reset_widget(self):
-        self.filepath_label.config(text='')
-        self.predicted_label.config(text='')
-        self.result_label.config(text='')
-
-    def open_file(self):
-        self.reset_widget()
-        initialdir = dirname(
-            self.filepath) if self.filepath is not None else './'
-        self.filepath = filedialog.askopenfilename(initialdir=initialdir,
-                                                   filetypes=[('extensions',
-                                                               self.extensions)
-                                                              ])
-        self.filepath_label.config(text='filepath: {}'.format(self.filepath))
-
-    def recognize(self):
-        pass
-
-    def run(self):
-        self.window.mainloop()
+    def __call__(self):
+        self.gui.launch(inbrowser=True, share=True)
