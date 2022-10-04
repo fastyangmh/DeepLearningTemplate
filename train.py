@@ -77,7 +77,9 @@ class Trainer:
         metric = 0
         for key in ['train', 'val']:
             metric += result[key]['test_loss']
-        nni.report_final_result(metric=metric)
+        #check nni experiment
+        if nni.get_experiment_id() != 'STANDALONE':
+            nni.report_final_result(metric=metric)
         #save project_parameters to default_root_dir
         with open(
                 join(self.trainer.logger.log_dir,

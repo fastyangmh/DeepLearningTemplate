@@ -136,9 +136,9 @@ class ProjectParameters:
         kwargs_dict = self.get_kwargs(args=args)
         self.is_valid_kwargs(kwargs_dict=kwargs_dict, check=args.dont_check)
         self.update(kwargs_dict=kwargs_dict)
-        #get nni parameter
-        nni_paramter = nni.get_next_parameter()
-        if nni_paramter:
+        #check nni experiment
+        if nni.get_experiment_id() != 'STANDALONE':
+            nni_paramter = nni.get_next_parameter()
             self.is_valid_kwargs(kwargs_dict=nni_paramter,
                                  check=args.dont_check)
             self.update(kwargs_dict=nni_paramter)
