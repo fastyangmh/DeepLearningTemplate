@@ -5,7 +5,8 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, Ea
 from typing import Union, List, Callable
 import torch
 import yaml
-from os.path import join
+from os.path import join, basename
+import nni
 
 
 #class
@@ -73,8 +74,14 @@ class Trainer:
         for stage, dataloader in dataloaders_dict.items():
             result[stage] = self.trainer.test(dataloaders=dataloader,
                                               ckpt_path='best')[0]
+        #nni record
+        metric = 0
+        for key in ['train', 'val']:
+            metric += result[key]['test_loss']
+        nni.report_final_result(metric=metric)
         #save project_parameters to default_root_dir
-        with open(join(self.trainer.logger.log_dir, 'config.yaml'),
-                  'w') as stream:
+        with open(
+                join(self.trainer.logger.log_dir,
+                     basename(self.project_parameters.config)), 'w') as stream:
             yaml.dump(data=vars(self.project_parameters), stream=stream)
         return result

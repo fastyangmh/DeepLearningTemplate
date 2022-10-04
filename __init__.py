@@ -5,3 +5,4 @@ from .model import create_model, SupervisedModel, VALID_MODEL
 from .train import Trainer
 from .predict import PredictDataset, Predictor
 from .predict_gui import PredictorGUI
+from .tuning import Tuner
