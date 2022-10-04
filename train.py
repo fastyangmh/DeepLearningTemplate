@@ -14,7 +14,7 @@ class Trainer:
     def __init__(self, project_parameters: argparse.Namespace,
                  datamodule_function: Callable,
                  model_function: Callable) -> None:
-        pl.seed_everything(seed=project_parameters.random_seed)
+        pl.seed_everything(seed=project_parameters.random_seed, workers=True)
         self.trainer = self.create_trainer(
             early_stopping=project_parameters.early_stopping,
             patience=project_parameters.patience,
@@ -39,7 +39,6 @@ class Trainer:
                             mode='min',
                             save_last=True,
                             save_weights_only=True),
-            DeviceStatsMonitor(cpu_stats=True),
             RichProgressBar(leave=True)
         ]
         if early_stopping:
