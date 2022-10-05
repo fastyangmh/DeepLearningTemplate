@@ -24,15 +24,15 @@ def pytorch_mnist_dataset_to_png(root):
         }
     }
     for stage in ['train', 'test']:
-        target_path = join(dirpath, 'images/{}'.format(stage))
+        target_path = join(dirpath, f'images/{stage}')
         makedirs(target_path, exist_ok=True)
         images = mnist.read_image_file(
-            path=join(dirpath, 'raw/{}'.format(files[stage]['images'])))
+            path=join(dirpath, f'raw/{files[stage]["images"]}'))
         labels = mnist.read_label_file(
-            path=join(dirpath, 'raw/{}'.format(files[stage]['labels'])))
+            path=join(dirpath, f'raw/{files[stage]["labels"]}'))
         for idx in tqdm(range(len(images))):
             prefix = str(idx).zfill(len(str(len(images))))
-            filename = '{}_{}.png'.format(prefix, labels[idx])
+            filename = f'{prefix}_{labels[idx]}.png'
             filename = join(target_path, filename)
             image = Image.fromarray(images[idx].numpy())
             image.save(fp=filename)
@@ -51,11 +51,10 @@ def pytorch_cifar10_dataset_to_png(root):
         'test': ['test_batch']
     }
     for stage in ['train', 'test']:
-        target_path = join(dirpath, 'images/{}'.format(stage))
+        target_path = join(dirpath, f'images/{stage}')
         makedirs(target_path, exist_ok=True)
         for file in files[stage]:
-            with open(join(dirpath, 'cifar-10-batches-py/{}'.format(file)),
-                      'rb') as f:
+            with open(join(dirpath, f'cifar-10-batches-py/{file}'), 'rb') as f:
                 content = pickle.load(f, encoding='bytes')
             # the data dimension is (length, channels, height, width)
             data = content[b'data'].reshape(-1, 3, 32, 32)
