@@ -288,6 +288,7 @@ class SupervisedModel(BaseModel):
                                    confusion_matrix=confusion_matrix,
                                    stage=stage)
         self.stage_index += 1
+        self.confusion_matrix_function.reset()
 
 
 #global parameters

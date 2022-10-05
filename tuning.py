@@ -1,35 +1,63 @@
-# import
-from ray import tune
+#NOTE: There is a reproducibility problem in NNI which is unable to reproduce the same results as the trials
+
+#import
+import yaml
+import argparse
+from os import makedirs
+from os.path import join, basename, realpath
+import datetime
+from copy import deepcopy
+import subprocess
+from typing import Any, Dict
 
 
-# class
-class BaseTuning:
-    def __init__(self) -> None:
-        pass
+#class
+class Tuner:
+    def __init__(self, project_parameters: argparse.Namespace) -> None:
+        self.project_parameters = project_parameters
+        self.nni_port = project_parameters.nni_port
 
-    def parse_hyperparameter_space(self, hyperparameter_space_config):
-        hyperparameter_space = {}
-        for key, value in hyperparameter_space_config.items():
-            for typ, arguments in value.items():
-                hyperparameter_space_arguments = []
-                for a, b in arguments.items():
-                    if type(b) is str:
-                        arg = '{}="{}"'.format(a, b)
-                    else:
-                        arg = '{}={}'.format(a, b)
-                    hyperparameter_space_arguments.append(arg)
-                hyperparameter_space_arguments = ','.join(
-                    hyperparameter_space_arguments)
-                arguments = hyperparameter_space_arguments
-                hyperparameter_space[key] = eval('tune.{}({})'.format(
-                    typ, arguments))
-        return hyperparameter_space
+    def set_config(self, project_parameters: argparse.Namespace):
+        experimentWorkingDirectory = realpath(
+            project_parameters.nni_config['experimentWorkingDirectory'])
+        project_parameters.nni_config[
+            'experimentWorkingDirectory'] = experimentWorkingDirectory
+        makedirs(experimentWorkingDirectory, exist_ok=True)
+        path = join(
+            experimentWorkingDirectory,
+            f'{datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")}')
 
-    def get_tuning_parameters(self, hyperparameter_space, project_parameters):
-        for k, v in hyperparameter_space.items():
-            if type(v) == str:
-                exec('project_parameters.{}="{}"'.format(k, v))
-            else:
-                exec('project_parameters.{}={}'.format(k, v))
-        project_parameters.num_workers = project_parameters.cpu_resources_per_trial
-        return project_parameters
+        #set config
+        data = vars(deepcopy(project_parameters))
+        data['mode'] = 'train'
+        project_parameters_config_filepath = path + f'_{basename(data["config"])}'
+        data['nni_config']['trialConcurrency'] = 1
+        data['nni_config']['trialCodeDirectory'] = realpath('.')
+        data['nni_config'][
+            'trialCommand'] = f'python main.py --config {project_parameters_config_filepath}'
+        return data, path, project_parameters_config_filepath
+
+    def save_config(self, data: Dict, path: str, config_filepath: str):
+        with open(config_filepath, 'w') as stream:
+            yaml.dump(data=data, stream=stream)
+        nni_config_filepath = path + f'_nni_config.yaml'
+        with open(nni_config_filepath, 'w') as stream:
+            yaml.dump(data=data['nni_config'], stream=stream)
+        return nni_config_filepath
+
+    def run_nni(self, nni_config_filepath: str):
+        result = subprocess.run([
+            'nnictl', 'create', '--config', nni_config_filepath, '--port',
+            str(self.nni_port)
+        ])
+        return result
+
+    def __call__(self, ) -> Any:
+        data, path, project_parameters_config_filepath = self.set_config(
+            project_parameters=self.project_parameters)
+        nni_config_filepath = self.save_config(
+            data=data,
+            path=path,
+            config_filepath=project_parameters_config_filepath)
+        result = self.run_nni(nni_config_filepath=nni_config_filepath)
+        return result

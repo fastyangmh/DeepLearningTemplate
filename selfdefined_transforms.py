@@ -13,18 +13,15 @@ class DigitalFilter(nn.Module):
     def __init__(self, filter_type: str, sample_rate: int,
                  cutoff_freq: Union[List, int]) -> None:
         super().__init__()
-        assert filter_type in [
-            'bandpass', 'lowpass', 'highpass', None
-        ], 'please check the filter_type argument.\nfilter_type: {}\nvalid: {}'.format(
-            filter_type, ['bandpass', 'lowpass', 'highpass', None])
+        valid_filter_type = ['bandpass', 'lowpass', 'highpass', None]
+        assert filter_type in valid_filter_type, f'please check the filter_type argument.\nfilter_type: {filter_type}\nvalid: {valid_filter_type}'
         if not isinstance(cutoff_freq, list):
             cutoff_freq = [cutoff_freq]
         cutoff_freq = np.array(cutoff_freq)
         # check the cutoff frequency satisfied Nyquist theorem
         assert not any(
             cutoff_freq / (sample_rate * 0.5) > 1
-        ), 'please check the cutoff_freq argument.\ncutoff_freq: {}\nvalid: {}'.format(
-            cutoff_freq, [1, sample_rate // 2])
+        ), f'please check the cutoff_freq argument.\ncutoff_freq: {cutoff_freq}\nvalid: {[1, sample_rate // 2]}'
         self.filter_type = filter_type
         self.sample_rate = sample_rate
         self.cutoff_freq = cutoff_freq

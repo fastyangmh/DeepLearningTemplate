@@ -5,7 +5,8 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, Ea
 from typing import Union, List, Callable
 import torch
 import yaml
-from os.path import join
+from os.path import join, basename
+import nni
 
 
 #class
@@ -13,7 +14,7 @@ class Trainer:
     def __init__(self, project_parameters: argparse.Namespace,
                  datamodule_function: Callable,
                  model_function: Callable) -> None:
-        pl.seed_everything(seed=project_parameters.random_seed)
+        pl.seed_everything(seed=project_parameters.random_seed, workers=True)
         self.trainer = self.create_trainer(
             early_stopping=project_parameters.early_stopping,
             patience=project_parameters.patience,
@@ -38,7 +39,6 @@ class Trainer:
                             mode='min',
                             save_last=True,
                             save_weights_only=True),
-            DeviceStatsMonitor(cpu_stats=True),
             RichProgressBar(leave=True)
         ]
         if early_stopping:
@@ -73,8 +73,16 @@ class Trainer:
         for stage, dataloader in dataloaders_dict.items():
             result[stage] = self.trainer.test(dataloaders=dataloader,
                                               ckpt_path='best')[0]
+        #nni record
+        metric = 0
+        for key in ['train', 'val']:
+            metric += result[key]['test_loss']
+        #check nni experiment
+        if nni.get_experiment_id() != 'STANDALONE':
+            nni.report_final_result(metric=metric)
         #save project_parameters to default_root_dir
-        with open(join(self.trainer.logger.log_dir, 'config.yaml'),
-                  'w') as stream:
+        with open(
+                join(self.trainer.logger.log_dir,
+                     basename(self.project_parameters.config)), 'w') as stream:
             yaml.dump(data=vars(self.project_parameters), stream=stream)
         return result

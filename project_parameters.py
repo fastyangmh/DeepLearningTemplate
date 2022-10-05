@@ -1,8 +1,9 @@
 # import
 import argparse
 from yaml import safe_load
-from os.path import isfile, isdir, abspath
+from os.path import isfile, isdir, realpath
 from typing import Dict, List
+import nni
 
 # def
 
@@ -91,10 +92,10 @@ class ProjectParameters:
                 kwargs_dict.update(new_dict)
         return kwargs_dict
 
-    def set_abspath(self):
+    def set_realpath(self):
         for k, v in self.config.items():
             if isinstance(v, str) and (isfile(v) or isdir(v)):
-                self.config[k] = abspath(v)
+                self.config[k] = realpath(v)
 
     def get_keys(self, keys: List = []):
         stack = [['', self.config]]
@@ -135,9 +136,15 @@ class ProjectParameters:
         kwargs_dict = self.get_kwargs(args=args)
         self.is_valid_kwargs(kwargs_dict=kwargs_dict, check=args.dont_check)
         self.update(kwargs_dict=kwargs_dict)
-        if self.config['mode'] == 'tuning':
+        #check nni experiment
+        if nni.get_experiment_id() != 'STANDALONE':
+            nni_paramter = nni.get_next_parameter()
+            self.is_valid_kwargs(kwargs_dict=nni_paramter,
+                                 check=args.dont_check)
+            self.update(kwargs_dict=nni_paramter)
+        if self.config['mode'] == 'train':
             self.config['config_keys'] = self.config_keys
-        self.set_abspath()
+        self.set_realpath()
         return argparse.Namespace(**self.config)
 
 
