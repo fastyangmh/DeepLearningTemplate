@@ -15,6 +15,7 @@ from typing import Any, Dict
 class Tuner:
     def __init__(self, project_parameters: argparse.Namespace) -> None:
         self.project_parameters = project_parameters
+        self.nni_port = project_parameters.nni_port
 
     def set_config(self, project_parameters: argparse.Namespace):
         experimentWorkingDirectory = realpath(
@@ -47,7 +48,7 @@ class Tuner:
     def run_nni(self, nni_config_filepath: str):
         result = subprocess.run([
             'nnictl', 'create', '--config', nni_config_filepath, '--port',
-            str(self.project_parameters.nni_port)
+            str(self.nni_port)
         ])
         return result
 
