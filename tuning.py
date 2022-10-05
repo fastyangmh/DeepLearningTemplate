@@ -1,3 +1,5 @@
+#NOTE: There is a reproducibility problem in NNI which is unable to reproduce the same results as the trials
+
 #import
 import yaml
 import argparse
@@ -45,7 +47,7 @@ class Tuner:
     def run_nni(self, nni_config_filepath: str):
         result = subprocess.run([
             'nnictl', 'create', '--config', nni_config_filepath, '--port',
-            '8081'
+            str(self.project_parameters.nni_port)
         ])
         return result
 
