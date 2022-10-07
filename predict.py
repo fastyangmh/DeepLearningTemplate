@@ -5,11 +5,16 @@ from typing import Callable, Tuple, TypeVar, Any, Union
 from glob import glob
 from os.path import join, splitext, isfile
 import argparse
-from . import create_model, parse_transforms, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 import torch
 from tqdm import tqdm
 
 T_co = TypeVar('T_co', covariant=True)
+try:
+    from . import create_model, parse_transforms, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+except:
+    from data_preparation import parse_transforms
+    from dataset import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+    from model import create_model
 
 
 #class
