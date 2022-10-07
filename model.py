@@ -15,7 +15,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import inspect
-from . import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+try:
+    from . import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+except:
+    from dataset import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 
 
 # class

@@ -321,7 +321,7 @@ class MyCMUARCTICForVC(Dataset):
 
 
 class MyBreastCancerDataset(Dataset):
-    # NOTE: this dataset contains only training and validation datasets and the training and validation of ratio is 8:2
+    # NOTE: the MyBreastCancerDataset dataset only contains training and validation datasets and the ratio is 8:2
     def __init__(self,
                  train: bool = True,
                  transform: Optional[Callable] = None,

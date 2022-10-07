@@ -1,10 +1,13 @@
 # import
 from __future__ import annotations
-from . import Predictor
 import argparse
 from typing import Callable, Optional, List, Any
 import gradio as gr
 from gradio.components import Component
+try:
+    from . import Predictor
+except:
+    from predict import Predictor
 
 
 # class
