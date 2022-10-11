@@ -142,7 +142,7 @@ class ProjectParameters:
             self.is_valid_kwargs(kwargs_dict=nni_paramter,
                                  check=args.dont_check)
             self.update(kwargs_dict=nni_paramter)
-        if self.config['mode'] == 'train':
+        if 'mode' in self.config and self.config['mode'] == 'train':
             self.config['config_keys'] = self.config_keys
         self.set_realpath()
         return argparse.Namespace(**self.config)

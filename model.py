@@ -29,7 +29,6 @@ class BaseModel(LightningModule):
         self.optimizers_config = project_parameters.optimizers_config
         self.lr = project_parameters.lr
         self.lr_schedulers_config = project_parameters.lr_schedulers_config
-        self.model_mode = project_parameters.model_mode
         self.save_hyperparameters()
 
     def import_class_from_file(self, filepath: str, class_name: str):
@@ -303,20 +302,18 @@ VALID_MODEL = [
 
 
 #def
-def create_model(project_parameters: argparse.Namespace):
+def create_model(project_parameters: argparse.Namespace,
+                 model_cls: LightningModule):
     if project_parameters.weighted_loss and project_parameters.mode not in [
             'train', 'tuning'
     ]:
         print(
-            'please check the weighted_loss and mode arguments.\nyou set weighted_loss to True,\nbut these arguments are only valid in train and tuning mode.'
+            'please check the weighted_loss and mode arguments.\nyou set weighted_loss to True,\nbut weighted_loss argument are only valid in train and tuning mode.'
         )
         project_parameters.weighted_loss = False
-    assert project_parameters.model_mode in VALID_MODEL, f'please check the model_mode argument.\nmodel_mode: {project_parameters.model_mode}\nvalid: {VALID_MODEL}'
     if project_parameters.checkpoint_path is not None:
         return eval(
-            f'{project_parameters.model_mode}.load_from_checkpoint(checkpoint_path=project_parameters.checkpoint_path, project_parameters=project_parameters)'
+            'model_cls.load_from_checkpoint(checkpoint_path=project_parameters.checkpoint_path, project_parameters=project_parameters)'
         )
     else:
-        return eval(
-            f'{project_parameters.model_mode}(project_parameters=project_parameters)'
-        )
+        return eval('model_cls(project_parameters=project_parameters)')

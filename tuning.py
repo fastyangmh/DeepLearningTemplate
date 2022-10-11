@@ -39,10 +39,10 @@ class Tuner:
 
     def save_config(self, data: Dict, path: str, config_filepath: str):
         with open(config_filepath, 'w') as stream:
-            yaml.dump(data=data, stream=stream)
+            yaml.dump(data=data, stream=stream, sort_keys=False)
         nni_config_filepath = path + f'_nni_config.yaml'
         with open(nni_config_filepath, 'w') as stream:
-            yaml.dump(data=data['nni_config'], stream=stream)
+            yaml.dump(data=data['nni_config'], stream=stream, sort_keys=False)
         return nni_config_filepath
 
     def run_nni(self, nni_config_filepath: str):
