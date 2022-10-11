@@ -3,33 +3,31 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchaudio.functional import lowpass_biquad, highpass_biquad
 import numpy as np
-from typing import Any
+from typing import Any, Callable, Union, List
 import torch
 import torchvision
 
 
 #class
 class DigitalFilter(nn.Module):
-    def __init__(self, filter_type, sample_rate, cutoff_freq) -> None:
+    def __init__(self, filter_type: str, sample_rate: int,
+                 cutoff_freq: Union[List, int]) -> None:
         super().__init__()
-        assert filter_type in [
-            'bandpass', 'lowpass', 'highpass', None
-        ], 'please check the filter_type argument.\nfilter_type: {}\nvalid: {}'.format(
-            filter_type, ['bandpass', 'lowpass', 'highpass', None])
-        if type(cutoff_freq) != list:
+        valid_filter_type = ['bandpass', 'lowpass', 'highpass', None]
+        assert filter_type in valid_filter_type, f'please check the filter_type argument.\nfilter_type: {filter_type}\nvalid: {valid_filter_type}'
+        if not isinstance(cutoff_freq, list):
             cutoff_freq = [cutoff_freq]
         cutoff_freq = np.array(cutoff_freq)
-        # check if the cutoff frequency satisfied Nyquist theorem
+        # check the cutoff frequency satisfied Nyquist theorem
         assert not any(
             cutoff_freq / (sample_rate * 0.5) > 1
-        ), 'please check the cutoff_freq argument.\ncutoff_freq: {}\nvalid: {}'.format(
-            cutoff_freq, [1, sample_rate // 2])
+        ), f'please check the cutoff_freq argument.\ncutoff_freq: {cutoff_freq}\nvalid: {[1, sample_rate // 2]}'
         self.filter_type = filter_type
         self.sample_rate = sample_rate
         self.cutoff_freq = cutoff_freq
 
-    def __call__(self, waveform):
-        if self.filter_type is None or self.filter_type == 'None':
+    def __call__(self, waveform: torch.Tensor):
+        if self.filter_type is None:
             return waveform
         elif self.filter_type == 'bandpass':
             waveform = lowpass_biquad(waveform=waveform,
@@ -50,11 +48,11 @@ class DigitalFilter(nn.Module):
 
 
 class PadWaveform(nn.Module):
-    def __init__(self, max_waveform_length) -> None:
+    def __init__(self, max_waveform_length: int) -> None:
         super().__init__()
         self.max_waveform_length = max_waveform_length
 
-    def forward(self, waveform):
+    def forward(self, waveform: torch.Tensor):
         # the dimension of waveform is (channels, length)
         channels, length = waveform.shape
         diff = self.max_waveform_length - length
@@ -67,10 +65,11 @@ class PadWaveform(nn.Module):
 
 
 class OneHotEncoder:
-    def __init__(self, num_classes) -> None:
+    def __init__(self, num_classes: int) -> None:
+        assert not num_classes is None, 'please set num_classes argument in target_transforms_config'
         self.num_classes = num_classes
 
-    def __call__(self, target) -> Any:
+    def __call__(self, target: Union[np.ndarray, torch.Tensor, List]) -> Any:
         #target dimention should be (num_classes,) or a scaler
         if isinstance(target, (np.ndarray, torch.Tensor,
                                list)) and len(target) == self.num_classes:
@@ -92,11 +91,11 @@ class OneHotEncoder:
 
 
 class LabelSmoothing(OneHotEncoder):
-    def __init__(self, alpha, num_classes) -> None:
+    def __init__(self, alpha, num_classes: int) -> None:
         super().__init__(num_classes=num_classes)
         self.alpha = alpha
 
-    def __call__(self, target) -> Any:
+    def __call__(self, target: Union[np.ndarray, torch.Tensor, List]) -> Any:
         target = super().__call__(target)
         return (1 - self.alpha) * target + (self.alpha / self.num_classes)
 
@@ -104,10 +103,10 @@ class LabelSmoothing(OneHotEncoder):
 class ResizePadding(nn.Module):
     def __init__(self,
                  target_size: int,
-                 interpolation=torchvision.transforms.functional.
+                 interpolation: Callable = torchvision.transforms.functional.
                  InterpolationMode.BILINEAR,
-                 max_size=None,
-                 antialias=None) -> None:
+                 max_size: Union[int, None] = None,
+                 antialias: Union[bool, None] = None) -> None:
         super().__init__()
         self.target_size = target_size
         self.interpolation = interpolation
@@ -137,11 +136,11 @@ class ResizePadding(nn.Module):
 
 class PaddingResize(torchvision.transforms.Resize):
     def __init__(self,
-                 size,
-                 interpolation=torchvision.transforms.functional.
+                 size: Union[List, int],
+                 interpolation: Callable = torchvision.transforms.functional.
                  InterpolationMode.BILINEAR,
-                 max_size=None,
-                 antialias=None):
+                 max_size: Union[int, None] = None,
+                 antialias: Union[bool, None] = None):
         super().__init__(size, interpolation, max_size, antialias)
 
     def forward(self, img):
@@ -157,3 +156,12 @@ class PaddingResize(torchvision.transforms.Resize):
         img = torchvision.transforms.functional.to_pil_image(
             pic=img, mode=None)  #convert tensor to PIL image
         return super().forward(img=img)
+
+
+class ColorConverter(nn.Module):
+    def __init__(self, color_space: str) -> None:
+        super().__init__()
+        self.color_space = color_space
+
+    def forward(self, img):
+        return img.convert(mode=self.color_space)
