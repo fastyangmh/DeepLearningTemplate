@@ -236,11 +236,11 @@ class ImageLightningDataModule(BaseLightningDataModule):
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, **kwargs):
+                 accelerator: str, random_seed: int, **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
-                         accelerator, **kwargs)
+                         accelerator, random_seed, **kwargs)
 
     def prepare_data(self) -> None:
         if self.predefined_dataset is not None:
@@ -281,12 +281,13 @@ class AudioLightningDataModule(BaseLightningDataModule):
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, random_seed: int, **kwargs):
+                 accelerator: str, random_seed: int, loader: Callable,
+                 **kwargs):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
                          accelerator, random_seed, **kwargs)
-        self.loader = kwargs.get('loader')
+        self.loader = loader
 
     def prepare_data(self) -> None:
         if self.predefined_dataset is not None:
