@@ -7,14 +7,14 @@ from os.path import join, splitext, isfile
 import argparse
 import torch
 from tqdm import tqdm
+import pytorch_lightning as pl
 
 T_co = TypeVar('T_co', covariant=True)
 try:
-    from . import create_model, parse_transforms, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+    from . import parse_transforms, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
 except:
     from data_preparation import parse_transforms
     from dataset import IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
-    from model import create_model
 
 
 #class
@@ -49,8 +49,8 @@ class PredictDataset(Dataset):
 
 class Predictor():
     def __init__(self, project_parameters: argparse.Namespace,
-                 loader: Callable) -> None:
-        self.model = create_model(project_parameters=project_parameters).eval()
+                 model: pl.LightningModule, loader: Callable) -> None:
+        self.model = model.eval()
         if project_parameters.accelerator == 'cuda' and torch.cuda.is_available(
         ):
             self.model = self.model.to(project_parameters.accelerator)

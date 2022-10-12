@@ -1,7 +1,7 @@
 #import
 import pytorch_lightning as pl
 import argparse
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping, DeviceStatsMonitor, RichProgressBar
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping, RichProgressBar
 from typing import Union, List, Callable
 import torch
 import yaml
@@ -84,5 +84,7 @@ class Trainer:
         with open(
                 join(self.trainer.logger.log_dir,
                      basename(self.project_parameters.config)), 'w') as stream:
-            yaml.dump(data=vars(self.project_parameters), stream=stream)
+            yaml.dump(data=vars(self.project_parameters),
+                      stream=stream,
+                      sort_keys=False)
         return result
