@@ -1,12 +1,14 @@
 # import
 import argparse
 from yaml import safe_load
-from os.path import isfile, isdir, abspath
+from os.path import isfile, isdir, realpath
+from typing import Dict, List
+import nni
 
 # def
 
 
-def load_yaml(filepath):
+def load_yaml(filepath: str):
     with open(filepath, 'r', encoding='utf-8') as f:
         config = safe_load(f)
     assert not (config is None), f'the {filepath} file is empty.'
@@ -71,7 +73,7 @@ class ProjectParameters:
             for v in kwargs.split(','):
                 key, value = v.split(sep='=', maxsplit=1)
                 if value in ['None', 'none', 'null', None]:
-                    exec(f'kwargs_dict["{key}"]={value}')
+                    exec(f'kwargs_dict["{key}"]=None')
                 elif kwargs_type == 'str':
                     exec(f'kwargs_dict["{key}"]="{value}"')
                 elif kwargs_type == 'num':
@@ -90,12 +92,12 @@ class ProjectParameters:
                 kwargs_dict.update(new_dict)
         return kwargs_dict
 
-    def set_abspath(self):
+    def set_realpath(self):
         for k, v in self.config.items():
             if isinstance(v, str) and (isfile(v) or isdir(v)):
-                self.config[k] = abspath(v)
+                self.config[k] = realpath(v)
 
-    def get_keys(self, keys: list = []):
+    def get_keys(self, keys: List = []):
         stack = [['', self.config]]
         while stack:
             root, dic = stack.pop()
@@ -108,12 +110,12 @@ class ProjectParameters:
                     keys.append(r)
         return keys
 
-    def is_valid_kwargs(self, kwargs_dict: dict, check: bool):
+    def is_valid_kwargs(self, kwargs_dict: Dict, check: bool):
         if check:
             for key in kwargs_dict.keys():
-                assert key in self.config_keys, f'please check if the keyword argument exists in the configuration.\nkwargs: {key}\nvalid: {self.config_keys}'
+                assert key in self.config_keys, f'please check the keyword argument exists in the configuration.\nkwargs: {key}\nvalid: {self.config_keys}'
 
-    def update(self, kwargs_dict: dict):
+    def update(self, kwargs_dict: Dict):
         for key, value in kwargs_dict.items():
             if key in self.config_keys:
                 key = key.split('-')
@@ -134,9 +136,15 @@ class ProjectParameters:
         kwargs_dict = self.get_kwargs(args=args)
         self.is_valid_kwargs(kwargs_dict=kwargs_dict, check=args.dont_check)
         self.update(kwargs_dict=kwargs_dict)
-        if self.config['mode'] == 'tuning':
+        #check nni experiment
+        if nni.get_experiment_id() != 'STANDALONE':
+            nni_paramter = nni.get_next_parameter()
+            self.is_valid_kwargs(kwargs_dict=nni_paramter,
+                                 check=args.dont_check)
+            self.update(kwargs_dict=nni_paramter)
+        if 'mode' in self.config and self.config['mode'] == 'train':
             self.config['config_keys'] = self.config_keys
-        self.set_abspath()
+        self.set_realpath()
         return argparse.Namespace(**self.config)
 
 
