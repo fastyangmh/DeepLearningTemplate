@@ -4,6 +4,7 @@ from yaml import safe_load
 from os.path import isfile, isdir, realpath
 from typing import Dict, List
 import nni
+import numpy as np
 
 # def
 
@@ -145,6 +146,9 @@ class ProjectParameters:
         if 'mode' in self.config and self.config['mode'] == 'train':
             self.config['config_keys'] = self.config_keys
         self.set_realpath()
+        if 'classes' in self.config and isfile(self.config['classes']):
+            self.config['classes'] = np.loadtxt(fname=self.config['classes'],
+                                                dtype=str).tolist()
         return argparse.Namespace(**self.config)
 
 
