@@ -118,13 +118,12 @@ class ProjectParameters:
 
     def update(self, kwargs_dict: Dict):
         for key, value in kwargs_dict.items():
-            if key in self.config_keys:
-                key = key.split('-')
-                key = ("['{}']" * len(key)).format(*key)
-                try:
-                    exec(f'self.config{key}={value}')
-                except:
-                    exec(f'self.config{key}="{value}"')
+            key = key.split('-')
+            key = ("['{}']" * len(key)).format(*key)
+            try:
+                exec(f'self.config{key}={value}')
+            except:
+                exec(f'self.config{key}="{value}"')
 
     def parse(self):
         args = self.parser.parse_args()
@@ -146,7 +145,10 @@ class ProjectParameters:
         if 'mode' in self.config and self.config['mode'] == 'train':
             self.config['config_keys'] = self.config_keys
         self.set_realpath()
-        if 'classes' in self.config and isfile(self.config['classes']):
+        #parse classes if classes is filepath
+        if 'classes' in self.config and isinstance(self.config['classes'],
+                                                   str) and isfile(
+                                                       self.config['classes']):
             self.config['classes'] = np.loadtxt(fname=self.config['classes'],
                                                 dtype=str).tolist()
         return argparse.Namespace(**self.config)
