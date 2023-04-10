@@ -1,8 +1,16 @@
-from .project_parameters import ProjectParameters
-from .dataset import AudioLoader, MyMNIST, MyCIFAR10, MyVOCSegmentation, MyVOCDetection, MySPEECHCOMMANDS, MyCMUARCTICForVC, MyBreastCancerDataset, MySeriesFolder, MyImageFolder, MyAudioFolder, PREDEFINED_DATASET, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
-from .data_preparation import parse_transforms, ImageLightningDataModule, AudioLightningDataModule, SeriesLightningDataModule, YOLOImageLightningDataModule
-from .model import create_model, SupervisedModel, VALID_MODEL
-from .train import Trainer
+from .dataset import (AUDIO_EXTENSIONS, IMG_EXTENSIONS, PREDEFINED_DATASET,
+                      SERIES_EXTENSIONS, AudioLoader, MyAudioFolder,
+                      MyBreastCancerDataset, MyCIFAR10, MyCMUARCTICForVC,
+                      MyImageFolder, MyMNIST, MySeriesFolder, MySPEECHCOMMANDS,
+                      MyVOCDetection, MyVOCSegmentation)
+from .data_preparation import (
+    AudioLightningDataModule, ImageLightningDataModule,
+    SeriesLightningDataModule, YOLOImageLightningDataModule, create_datamodule,
+    get_loader, parse_transforms, ClassTable, LoaderClassTable,
+    DatasetClassTable, DataModuleClassTable)
+from .model import VALID_MODEL, SupervisedModel, create_model
 from .predict import PredictDataset, Predictor
 from .predict_gui import BasePredictorGUI, ClassificationPredictorGUI
+from .project_parameters import ProjectParameters
+from .train import Trainer
 from .tuning import Tuner

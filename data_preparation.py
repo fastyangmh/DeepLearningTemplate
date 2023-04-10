@@ -1,96 +1,94 @@
 # import
-from typing import Optional, Union, List, Dict, Callable, Any
-import numpy as np
-from collections import defaultdict
-import torchvision
-import torchaudio
-from pytorch_lightning import LightningDataModule
-import torch
-from os.path import join
-from torch.utils.data import random_split, DataLoader, Dataset
-from os import makedirs
-import albumentations
+import argparse
+import inspect
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from copy import deepcopy
+from os import makedirs
+from os.path import join
+from typing import Any, Callable, Dict, List, Optional, Type, Union
+
+import albumentations
+import numpy as np
+import torch
+import torchaudio
+import torchvision
+from pytorch_lightning import LightningDataModule
+from torch.utils.data import DataLoader, Dataset, random_split
+
 try:
-    from . import selfdefined_transforms, PREDEFINED_DATASET, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
+    from . import (AUDIO_EXTENSIONS, IMG_EXTENSIONS, PREDEFINED_DATASET,
+                   SERIES_EXTENSIONS, AudioLoader, MyAudioFolder,
+                   MyBreastCancerDataset, MyCIFAR10, MyCMUARCTICForVC,
+                   MyImageFolder, MyMNIST, MySeriesFolder, MySPEECHCOMMANDS,
+                   MyVOCDetection, MyVOCSegmentation, selfdefined_transforms)
 except:
     import selfdefined_transforms
-    from dataset import PREDEFINED_DATASET, IMG_EXTENSIONS, AUDIO_EXTENSIONS, SERIES_EXTENSIONS
-
-
-# def
-def parse_transforms(transforms_config: Dict):
-    if transforms_config is None:
-        return {'train': None, 'val': None, 'test': None, 'predict': None}
-    transforms_dict = defaultdict(list)
-    for stage in transforms_config.keys():
-        if transforms_config[stage] is None:
-            transforms_dict[stage] = None
-            continue
-        compose_type = []
-        for name, value in transforms_config[stage].items():
-            #transform name
-            transform_type, name = name.split('.')
-            if transform_type == 'albumentations' and name in dir(
-                    albumentations):
-                name = f'albumentations.{name}'
-            elif transform_type == 'torchvision' and name in dir(
-                    torchvision.transforms):
-                name = f'torchvision.transforms.{name}'
-            elif transform_type == 'torchaudio' and name in dir(
-                    torchaudio.transforms):
-                name = f'torchaudio.transforms.{name}'
-            elif transform_type == 'selfdefined' and name in dir(
-                    selfdefined_transforms):
-                #the transformations I have defined in this file
-                name = f'selfdefined_transforms.{name}'
-            else:
-                assert False, f'please check the transform name in {stage} transforms_config.\n the error name: {transform_type}.{name}'
-            compose_type.append(transform_type)
-
-            #transform value
-            if value is None:
-                transforms_dict[stage].append(eval(f'{name}()'))
-            else:
-                if isinstance(value, dict):
-                    transform_arguments = []
-                    for a, b in value.items():
-                        if isinstance(b, str):
-                            arg = f'{a}="{b}"'
-                        else:
-                            arg = f'{a}={b}'
-                        transform_arguments.append(arg)
-                    transform_arguments = ','.join(transform_arguments)
-                    value = transform_arguments
-                transforms_dict[stage].append(eval(f'{name}({value})'))
-        if 'albumentations' in compose_type:
-            transforms_dict[stage] = albumentations.Compose(
-                transforms_dict[stage],
-                bbox_params=albumentations.BboxParams(format='yolo'))
-        else:
-            transforms_dict[stage] = torchvision.transforms.Compose(
-                transforms_dict[stage])
-    return transforms_dict
-
-
-def yolo_collate_fn(batch):
-    tensors, targets = zip(*batch)
-    for idx, v in enumerate(targets):
-        if len(v):
-            v[:, 0] = idx
-    tensors = np.stack(arrays=tensors, axis=0)
-    targets = np.concatenate(targets, 0)
-    return torch.from_numpy(tensors), torch.from_numpy(targets)
-
+    from dataset import (AUDIO_EXTENSIONS, IMG_EXTENSIONS, PREDEFINED_DATASET,
+                         SERIES_EXTENSIONS, AudioLoader, MyAudioFolder,
+                         MyBreastCancerDataset, MyCIFAR10, MyCMUARCTICForVC,
+                         MyImageFolder, MyMNIST, MySeriesFolder,
+                         MySPEECHCOMMANDS, MyVOCDetection, MyVOCSegmentation)
 
 # class
+
+
+class ClassTable:
+    def __init__(self):
+        self._table = defaultdict(lambda: NotImplementedError)
+
+    def get(self, key: str) -> Type:
+        return self._table[key]
+
+    def add(self, key: str, class_method: Type):
+        self._table[key] = class_method
+
+    def add_all(self, keys: List[str], class_methods: List[Type]):
+        for key, class_method in zip(keys, class_methods):
+            self.add(key, class_method)
+
+
+class DatasetClassTable(ClassTable):
+    def __init__(self) -> None:
+        super().__init__()
+        keys = [
+            'IMG_EXTENSIONS', 'AUDIO_EXTENSIONS', 'SERIES_EXTENSIONS',
+            'BreastCancerDataset', 'CIFAR10', 'CMUARCTICForVC', 'MNIST',
+            'SPEECHCOMMANDS', 'VOCDetection', 'VOCSegmentation'
+        ]
+        class_methods = [
+            MyImageFolder, MyAudioFolder, MySeriesFolder,
+            MyBreastCancerDataset, MyCIFAR10, MyCMUARCTICForVC, MyMNIST,
+            MySPEECHCOMMANDS, MyVOCDetection, MyVOCSegmentation
+        ]
+        self.add_all(keys=keys, class_methods=class_methods)
+
+
+class DataModuleClassTable(ClassTable):
+    def __init__(self) -> None:
+        super().__init__()
+        keys = ['IMG_EXTENSIONS', 'AUDIO_EXTENSIONS', 'SERIES_EXTENSIONS']
+        class_methods = [
+            ImageLightningDataModule, AudioLightningDataModule,
+            SeriesLightningDataModule
+        ]
+        self.add_all(keys=keys, class_methods=class_methods)
+
+
+class LoaderClassTable(ClassTable):
+    def __init__(self):
+        super().__init__()
+        keys = ['AUDIO']
+        class_methods = [AudioLoader]
+        self.add_all(keys=keys, class_methods=class_methods)
+
+
 class BaseLightningDataModule(LightningDataModule, ABC):
     def __init__(self, root: str, predefined_dataset: str,
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, random_seed: int, **kwargs):
+                 accelerator: str, random_seed: int, **kwargs: Any):
         super().__init__()
         assert predefined_dataset in PREDEFINED_DATASET, f'please check the predefined_dataset argument.\npredefined_dataset: {predefined_dataset}\nvalid: {PREDEFINED_DATASET}'
         self.predefined_dataset = predefined_dataset
@@ -236,7 +234,7 @@ class ImageLightningDataModule(BaseLightningDataModule):
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, random_seed: int, **kwargs):
+                 accelerator: str, random_seed: int, **kwargs: Any):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
@@ -282,7 +280,7 @@ class AudioLightningDataModule(BaseLightningDataModule):
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
                  accelerator: str, random_seed: int, loader: Callable,
-                 **kwargs):
+                 **kwargs: Any):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
@@ -327,7 +325,7 @@ class SeriesLightningDataModule(BaseLightningDataModule):
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, random_seed: int, **kwargs):
+                 accelerator: str, random_seed: int, **kwargs: Any):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
@@ -359,7 +357,7 @@ class YOLOImageLightningDataModule(ImageLightningDataModule):
                  dataset_cls: Callable, transforms_config: Dict,
                  target_transforms_config: Dict, max_samples: int,
                  classes: List, batch_size: int, num_workers: int,
-                 accelerator: str, **kwargs):
+                 accelerator: str, **kwargs: Any):
         super().__init__(root, predefined_dataset, dataset_cls,
                          transforms_config, target_transforms_config,
                          max_samples, classes, batch_size, num_workers,
@@ -371,3 +369,118 @@ class YOLOImageLightningDataModule(ImageLightningDataModule):
         data_loader = super().data_loader(dataset, shuffle)
         data_loader.collate_fn = yolo_collate_fn
         return data_loader
+
+
+# def
+def parse_transforms(transforms_config: Dict):
+    if transforms_config is None:
+        return {'train': None, 'val': None, 'test': None, 'predict': None}
+    transforms_dict = defaultdict(list)
+    for stage, stage_config in transforms_config.items():
+        if stage_config is None:
+            transforms_dict[stage] = None
+            continue
+
+        used_modules = []
+        for name, value in stage_config.items():
+            #transform method
+            transform_module, method = parse_transform_module_and_name(
+                stage, name)
+            used_modules.append(transform_module)
+
+            #transform argument
+            if value is None:
+                transforms_dict[stage].append(eval(f'{method}()'))
+            else:
+                value = parse_transform_arguments(value)
+                transforms_dict[stage].append(eval(f'{method}({value})'))
+        if 'albumentations' in used_modules:
+            transforms_dict[stage] = albumentations.Compose(
+                transforms_dict[stage],
+                bbox_params=albumentations.BboxParams(format='yolo'))
+        else:
+            transforms_dict[stage] = torchvision.transforms.Compose(
+                transforms_dict[stage])
+    return transforms_dict
+
+
+def parse_transform_arguments(value: Union[None, Dict]):
+    if isinstance(value, dict):
+        transform_arguments = ','.join([
+            f'{a}="{b}"' if isinstance(b, str) else f'{a}={b}'
+            for a, b in value.items()
+        ])
+        value = transform_arguments
+    return value
+
+
+def parse_transform_module_and_name(stage: str, name: str):
+    transform_module, method_name = name.split('.')
+    if transform_module == 'albumentations' and method_name in dir(
+            albumentations):
+        method = f'albumentations.{method_name}'
+    elif transform_module == 'torchvision' and method_name in dir(
+            torchvision.transforms):
+        method = f'torchvision.transforms.{method_name}'
+    elif transform_module == 'torchaudio' and method_name in dir(
+            torchaudio.transforms):
+        method = f'torchaudio.transforms.{method_name}'
+    elif transform_module == 'selfdefined' and method_name in dir(
+            selfdefined_transforms):
+        #the transformations I have defined in this file
+        method = f'selfdefined_transforms.{method_name}'
+    else:
+        assert False, f'please check the transform name in {stage} transforms_config.\n the error name: {name}'
+    return transform_module, method
+
+
+def yolo_collate_fn(batch: np.ndarray):
+    inputs, targets = zip(*batch)
+    for idx, target in enumerate(targets):
+        if len(target) > 0:
+            target[:, 0] = idx
+    inputs = np.stack(arrays=inputs, axis=0)
+    targets = np.concatenate(targets, axis=0)
+    return torch.from_numpy(inputs), torch.from_numpy(targets)
+
+
+def create_datamodule(
+    project_parameters: argparse.Namespace,
+    dataset_class_table: DatasetClassTable = DatasetClassTable(),
+    data_module_class_table: DataModuleClassTable = DataModuleClassTable(),
+    loader_class_table: LoaderClassTable = LoaderClassTable()):
+    if project_parameters.predefined_dataset:
+        dataset_cls = dataset_class_table.get(
+            key=project_parameters.predefined_dataset)
+    else:
+        dataset_cls = dataset_class_table.get(
+            key=project_parameters.file_extensions)
+
+    data_module = data_module_class_table.get(
+        key=project_parameters.file_extensions)
+
+    args = {}
+    for arg in inspect.getfullargspec(data_module).args:
+        if arg == 'self':
+            continue
+        if arg == 'dataset_cls':
+            args[arg] = dataset_cls
+        elif arg == 'loader':
+            loader_type = project_parameters.file_extensions.split('_')[0]
+            args[arg] = get_loader(
+                loader_class_table=loader_class_table,
+                loader_type=loader_type,
+                loader_kwargs=project_parameters.loader_kwargs)
+        else:
+            args[arg] = vars(project_parameters)[arg]
+    return data_module(**args)
+
+
+def get_loader(loader_class_table: Type, loader_type: str,
+               loader_kwargs: Dict):
+    method = loader_class_table.get(loader_type)
+    if method is not None:
+        loader = method(**loader_kwargs)
+        return loader
+    else:
+        raise KeyError(f'{loader_type} type loader not implemented')
