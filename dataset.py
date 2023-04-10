@@ -1,21 +1,22 @@
 #import
-from typing import Callable, Dict, Tuple, Optional, TypeVar, Union, Any
-import random
-from torchvision.datasets import MNIST, CIFAR10, ImageFolder, DatasetFolder, VOCSegmentation, VOCDetection, folder
-import random
-from torchaudio.datasets import SPEECHCOMMANDS, CMUARCTIC
-from pathlib import Path
-from torch import Tensor
+import inspect
 import os
-from PIL import Image
-from torch.utils.data import Dataset
-from sklearn.datasets import load_breast_cancer
+import random
+import sys
 from glob import glob
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple, TypeVar, Union
+
 import numpy as np
 import pandas as pd
-import inspect
-import sys
 import torchaudio
+from PIL import Image
+from sklearn.datasets import load_breast_cancer
+from torch import Tensor
+from torch.utils.data import Dataset
+from torchaudio.datasets import CMUARCTIC, SPEECHCOMMANDS
+from torchvision.datasets import (CIFAR10, MNIST, DatasetFolder, ImageFolder,
+                                  VOCDetection, VOCSegmentation, folder)
 
 T_co = TypeVar('T_co', covariant=True)
 
